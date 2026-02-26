@@ -1,0 +1,51 @@
+# ─── Python ───────────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ─── Environment / Secrets ────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+secrets.json
+credentials.json
+
+# ─── Next.js / Node ───────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+node_modules/
+
+# ─── Claude AI (local config & memory) ───────────────────────────────────────
+.claude/
+**/.claude/
+
+# ─── OS / Editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/
+*.suo
+*.user
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+
+# ─── Misc build artifacts ─────────────────────────────────────────────────────
+*.tsbuildinfo
