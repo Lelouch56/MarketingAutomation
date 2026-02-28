@@ -5,7 +5,7 @@ import { AgentRunStatus } from '../../types';
 import { setAgentState } from '../storage';
 
 interface UseAgentPollerOptions {
-  agentId: 'agent1' | 'agent2';
+  agentId: 'agent1' | 'agent2' | 'agent3' | 'agent4';
   fetchStatus: () => Promise<AgentRunStatus>;
   intervalMs?: number;
 }

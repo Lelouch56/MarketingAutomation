@@ -12,12 +12,15 @@ Agent 3: LinkedIn Outbound Automation
 """
 
 import json
+import logging
 import random
 import threading
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from app.storage.json_db import JsonDB
 from app.core.llm_provider import LLMConfig, call_llm_json, LLMError
@@ -210,8 +213,9 @@ def _step3_seamless_upload(prospects: list, config: LLMConfig) -> list:
             if isinstance(p, dict):
                 p["status"] = "filtered"
         return filtered
-    except Exception:
+    except Exception as e:
         # Non-critical: fall back to keeping all prospects as-is
+        logger.warning("Prospect filtering failed, keeping all prospects: %s", str(e)[:100])
         for p in prospects:
             p["status"] = "filtered"
         return prospects
@@ -293,7 +297,8 @@ def _step5_email_outreach(
             except IntegrationError:
                 t["klenty_enrolled"] = False
                 updated = True
-            except Exception:
+            except Exception as e:
+                logger.error("Unexpected error enrolling %s in Klenty: %s", t.get("email"), str(e)[:100])
                 t["klenty_enrolled"] = False
                 updated = True
         elif not klenty_config and not t.get("klenty_enrolled"):
@@ -317,7 +322,8 @@ def _step5_email_outreach(
             except IntegrationError:
                 t["outplay_enrolled"] = False
                 updated = True
-            except Exception:
+            except Exception as e:
+                logger.error("Unexpected error enrolling %s in Outplay: %s", t.get("email"), str(e)[:100])
                 t["outplay_enrolled"] = False
                 updated = True
         elif not outplay_config and not t.get("outplay_enrolled"):

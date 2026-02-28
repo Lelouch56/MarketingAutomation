@@ -11,11 +11,14 @@ Agent 4: Analytics & Reporting
 """
 
 import json
+import logging
 import threading
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from app.storage.json_db import JsonDB
 from app.core.llm_provider import LLMConfig, call_llm_json, LLMError
@@ -189,6 +192,7 @@ def _step2_ai_analysis(aggregated: dict, config: LLMConfig) -> dict:
         )
         return result if isinstance(result, dict) else {}
     except Exception as e:
+        logger.warning("AI analysis failed, using fallback: %s", str(e)[:100])
         # Fallback: generate basic analysis from raw data
         summary = aggregated.get("summary", {})
         total = summary.get("total_leads", 0)
@@ -305,7 +309,8 @@ def _step5_send_pdf_report(run_id: str, analysis: dict, config: LLMConfig) -> tu
         )
         executive_summary = result.get("executive_summary", "")
         one_liner = result.get("one_liner", "")
-    except Exception:
+    except Exception as e:
+        logger.warning("Executive summary generation failed, using fallback: %s", str(e)[:100])
         # Fallback summary
         funnel = analysis.get("funnel_summary", {})
         executive_summary = (

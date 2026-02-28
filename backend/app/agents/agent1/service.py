@@ -12,11 +12,14 @@ Agent 1: Content Writer & SEO + LinkedIn Automation
 """
 
 import json
+import logging
 import threading
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from app.storage.json_db import JsonDB
 from app.core.llm_provider import LLMConfig, call_llm_json, LLMError
@@ -168,7 +171,8 @@ def _step4_quality_check(blog_data: dict, topic: str, config: LLMConfig) -> dict
             "reasons": result.get("reasons", []),
             "improvements": result.get("improvements", []),
         }
-    except Exception:
+    except Exception as e:
+        logger.warning("Quality check failed, using default approval: %s", str(e)[:100])
         return {"verdict": "APPROVED", "score": 75, "reasons": ["Quality check skipped"], "improvements": []}
 
 
@@ -188,7 +192,8 @@ def _step5_generate_linkedin(blog_data: dict, blog_url: str, config: LLMConfig) 
             "post_text": result.get("post_text", ""),
             "hashtags": result.get("hashtags", []),
         }
-    except Exception:
+    except Exception as e:
+        logger.warning("LinkedIn post generation failed: %s", str(e)[:100])
         return {"post_text": "", "hashtags": []}
 
 

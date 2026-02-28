@@ -16,6 +16,9 @@ import {
   Divider,
   CircularProgress,
   Snackbar,
+  FormControlLabel,
+  Switch,
+  Tooltip,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -27,8 +30,8 @@ import StepperFlow from '../../../components/agents/StepperFlow';
 import ResultsTable, { Column } from '../../../components/data/ResultsTable';
 import StatusBadge from '../../../components/agents/StatusBadge';
 import { useAgentPoller } from '../../../lib/hooks/useAgentPoller';
-import { agent1Api, agent2Api, agent3Api, agent4Api } from '../../../services/api';
-import { getLLMConfig, appendLog, getAgentState } from '../../../lib/storage';
+import { agent1Api, agent2Api, agent3Api, agent4Api, extractApiError } from '../../../services/api';
+import { getLLMConfig, appendLog, getAgentState, getWordPressConfig, getLinkedInConfig } from '../../../lib/storage';
 import { TopicRecord, LeadRecord, OutreachTargetRecord, ReportRecord } from '../../../types';
 
 const TOPIC_COLUMNS: Column[] = [
@@ -130,6 +133,10 @@ export default function AgentDetailPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Agent 1 publish toggles — only relevant when respective integration is configured
+  const [enableWordPress, setEnableWordPress] = useState(true);
+  const [enableLinkedIn, setEnableLinkedIn] = useState(true);
+
   const isAgent1 = id === 'agent1';
   const isAgent2 = id === 'agent2';
   const isAgent3 = id === 'agent3';
@@ -178,7 +185,7 @@ export default function AgentDetailPage() {
       return;
     }
     try {
-      if (isAgent1) await agent1Api.run();
+      if (isAgent1) await agent1Api.run({ wordpress: enableWordPress, linkedin: enableLinkedIn });
       else if (isAgent2) await agent2Api.run();
       else if (isAgent3) await agent3Api.run();
       else await agent4Api.run();
@@ -195,17 +202,17 @@ export default function AgentDetailPage() {
     } catch (e: unknown) {
       setRunError(e instanceof Error ? e.message : 'Failed to start agent');
     }
-  }, [isAgent1, isAgent2, isAgent3, id, meta.name, startPolling]);
+  }, [isAgent1, isAgent2, isAgent3, id, meta.name, startPolling, enableWordPress, enableLinkedIn]);
 
   const handleAddTopic = async () => {
     if (!newTopicText.trim()) { setFormError('Topic cannot be empty'); return; }
+    setFormError('');
     try {
       await agent1Api.addTopic(newTopicText.trim());
       setNewTopicText('');
       setFormSuccess('Topic added successfully');
-      setFormError('');
       agent1Api.getTopics().then(setTopics);
-    } catch { setFormError('Failed to add topic'); }
+    } catch (err) { setFormError(extractApiError(err)); }
   };
 
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,15 +222,19 @@ export default function AgentDetailPage() {
       setFormError('Please select a .csv file');
       return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError('File too large. Maximum allowed size is 5 MB.');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     setCsvUploading(true);
     setFormError('');
     try {
       const result = await agent1Api.uploadTopicsCsv(file);
       setFormSuccess(`${result.added_count} topic(s) imported from CSV`);
       agent1Api.getTopics().then(setTopics);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setFormError(msg || 'Failed to upload CSV');
+    } catch (err) {
+      setFormError(extractApiError(err));
     } finally {
       setCsvUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -231,20 +242,30 @@ export default function AgentDetailPage() {
   };
 
   const handleAddLead = async () => {
-    if (!newLeadEmail.trim()) { setFormError('Email is required'); return; }
+    const emailTrimmed = newLeadEmail.trim();
+    if (!emailTrimmed) { setFormError('Email is required'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailTrimmed)) {
+      setFormError('Please enter a valid email address');
+      return;
+    }
+    const websiteTrimmed = newLeadWebsite.trim();
+    if (websiteTrimmed && !/^https?:\/\//.test(websiteTrimmed)) {
+      setFormError('Website URL must start with http:// or https://');
+      return;
+    }
+    setFormError('');
     try {
       await agent2Api.addLead({
-        email: newLeadEmail.trim(),
-        website: newLeadWebsite.trim() || undefined,
+        email: emailTrimmed,
+        website: websiteTrimmed || undefined,
         name: newLeadName.trim() || undefined,
         company: newLeadCompany.trim() || undefined,
       });
       setNewLeadEmail(''); setNewLeadWebsite('');
       setNewLeadName(''); setNewLeadCompany('');
       setFormSuccess('Lead added successfully');
-      setFormError('');
       agent2Api.getLeads().then(setLeads);
-    } catch { setFormError('Failed to add lead'); }
+    } catch (err) { setFormError(extractApiError(err)); }
   };
 
   const handleApproveTarget = async (targetId: string) => {
@@ -253,8 +274,8 @@ export default function AgentDetailPage() {
       await agent3Api.approveTarget(targetId);
       setFormSuccess('Prospect approved for outreach');
       agent3Api.getOutreachTargets().then(setOutreachTargets);
-    } catch {
-      setFormError('Failed to approve prospect');
+    } catch (err) {
+      setFormError(extractApiError(err));
     } finally {
       setApprovingId(null);
     }
@@ -295,15 +316,48 @@ export default function AgentDetailPage() {
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setRunError('')}>{runError}</Alert>
       )}
 
-      <Box display="flex" gap={2} mb={3}>
-        <Button
-          variant="contained"
-          startIcon={isPolling ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
-          onClick={handleRun}
-          disabled={isPolling || status?.status === 'running'}
-        >
-          {isPolling ? 'Running…' : 'Run Now'}
-        </Button>
+      <Box display="flex" flexDirection="column" gap={1} mb={3}>
+        <Box display="flex" gap={2}>
+          <Button
+            variant="contained"
+            startIcon={isPolling ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+            onClick={handleRun}
+            disabled={isPolling || status?.status === 'running'}
+          >
+            {isPolling ? 'Running…' : 'Run Now'}
+          </Button>
+        </Box>
+
+        {isAgent1 && (
+          <Box display="flex" gap={3} alignItems="center" sx={{ pl: 0.5 }}>
+            <Tooltip title={getWordPressConfig()?.siteUrl ? 'Publish blog to WordPress' : 'WordPress not configured in Settings'}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={enableWordPress}
+                    onChange={(e) => setEnableWordPress(e.target.checked)}
+                    size="small"
+                    disabled={!getWordPressConfig()?.siteUrl}
+                  />
+                }
+                label={<Typography variant="caption" color={getWordPressConfig()?.siteUrl ? 'text.primary' : 'text.disabled'}>WordPress</Typography>}
+              />
+            </Tooltip>
+            <Tooltip title={getLinkedInConfig()?.accessToken ? 'Post to LinkedIn after publishing' : 'LinkedIn not configured in Settings'}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={enableLinkedIn}
+                    onChange={(e) => setEnableLinkedIn(e.target.checked)}
+                    size="small"
+                    disabled={!getLinkedInConfig()?.accessToken}
+                  />
+                }
+                label={<Typography variant="caption" color={getLinkedInConfig()?.accessToken ? 'text.primary' : 'text.disabled'}>LinkedIn</Typography>}
+              />
+            </Tooltip>
+          </Box>
+        )}
       </Box>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>

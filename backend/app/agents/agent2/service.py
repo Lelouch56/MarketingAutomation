@@ -11,11 +11,13 @@ Agent 2: Lead Data Collection & Email Automation
   7. save_results      - Write updated leads back to leads.json
 """
 
+import logging
 import threading
 import time
 import uuid
-import warnings
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 from typing import Optional
 
 import requests
@@ -190,11 +192,9 @@ def _scrape_website(url: str) -> str:
     if not url:
         return ""
     try:
-        # Suppress InsecureRequestWarning for sites with bad SSL certs
-        warnings.filterwarnings("ignore", message="Unverified HTTPS request")
         if not url.startswith("http"):
             url = "https://" + url
-        resp = requests.get(url, timeout=10, verify=False, headers=SCRAPE_HEADERS)
+        resp = requests.get(url, timeout=10, verify=True, headers=SCRAPE_HEADERS)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         # Remove script and style tags
@@ -205,7 +205,11 @@ def _scrape_website(url: str) -> str:
         import re
         text = re.sub(r"\s+", " ", text).strip()
         return text[:3000]
-    except Exception:
+    except requests.exceptions.SSLError as e:
+        logger.warning("SSL error scraping %s: %s", url, str(e)[:100])
+        return ""
+    except Exception as e:
+        logger.debug("Failed to scrape %s: %s", url, str(e)[:100])
         return ""
 
 
@@ -308,7 +312,8 @@ def _step6_assign_campaigns(
                 klenty_enrolled += 1
             except IntegrationError:
                 lead["klenty_enrolled"] = False
-            except Exception:
+            except Exception as e:
+                logger.error("Unexpected error enrolling %s in Klenty: %s", lead.get("email"), str(e)[:100])
                 lead["klenty_enrolled"] = False
 
         # Auto-enroll in Outplay if config is provided and sequence applies
@@ -325,7 +330,8 @@ def _step6_assign_campaigns(
                 outplay_enrolled += 1
             except IntegrationError:
                 lead["outplay_enrolled"] = False
-            except Exception:
+            except Exception as e:
+                logger.error("Unexpected error enrolling %s in Outplay: %s", lead.get("email"), str(e)[:100])
                 lead["outplay_enrolled"] = False
 
     return leads, klenty_enrolled, outplay_enrolled

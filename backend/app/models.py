@@ -2,8 +2,11 @@
 Pydantic v2 request/response models for the Marketing Automation AI API.
 """
 
-from pydantic import BaseModel
+import re
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Any
+
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
 # ─────────────────────────────────────────────────────────────
@@ -83,6 +86,16 @@ class TopicCreate(BaseModel):
     topic: str
     status: str = "Pending"
 
+    @field_validator('topic')
+    @classmethod
+    def validate_topic(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError('Topic text cannot be empty')
+        if len(v) > 2000:
+            raise ValueError('Topic text must be 2000 characters or fewer')
+        return v
+
 
 # ─────────────────────────────────────────────────────────────
 # Lead Models
@@ -93,6 +106,42 @@ class LeadCreate(BaseModel):
     website: Optional[str] = None
     name: Optional[str] = None
     company: Optional[str] = None
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not v:
+            raise ValueError('Email cannot be empty')
+        if len(v) > 254:
+            raise ValueError('Email address is too long (max 254 chars)')
+        if not _EMAIL_RE.match(v):
+            raise ValueError('Invalid email address format')
+        return v
+
+    @field_validator('website')
+    @classmethod
+    def validate_website(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        if not re.match(r'^https?://', v):
+            raise ValueError('Website URL must start with http:// or https://')
+        if len(v) > 2048:
+            raise ValueError('Website URL is too long (max 2048 chars)')
+        return v
+
+    @field_validator('company')
+    @classmethod
+    def validate_company(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if len(v) > 255:
+            raise ValueError('Company name must be 255 characters or fewer')
+        return v
 
 
 # ─────────────────────────────────────────────────────────────

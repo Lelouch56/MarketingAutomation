@@ -188,5 +188,7 @@ def call_llm_json(config: LLMConfig, system_prompt: str, user_prompt: str) -> di
     cleaned = _clean_json_response(raw)
     try:
         return json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        raise LLMError(f"LLM returned invalid JSON: {e}\nRaw response: {raw[:500]}") from e
+    except json.JSONDecodeError:
+        raise LLMError(
+            "LLM returned a non-JSON response. Try again or switch to a different model in Settings."
+        )

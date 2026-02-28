@@ -19,7 +19,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import StatusBadge from '../../components/agents/StatusBadge';
-import { globalApi } from '../../services/api';
+import { globalApi, extractApiError } from '../../services/api';
 import { AgentMeta } from '../../types';
 
 export default function AgentsPage() {
@@ -29,10 +29,11 @@ export default function AgentsPage() {
   const router = useRouter();
 
   useEffect(() => {
+    setError('');
     globalApi
       .getAgents()
       .then(setAgents)
-      .catch(() => setError('Could not connect to backend. Make sure the server is running.'))
+      .catch((err) => setError(extractApiError(err) || 'Could not connect to backend. Make sure the server is running.'))
       .finally(() => setLoading(false));
   }, []);
 

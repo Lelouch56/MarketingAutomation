@@ -151,8 +151,6 @@ def list_topics():
 
 @router.post("/agents/agent1/topics", status_code=201)
 def create_topic(topic: TopicCreate):
-    if not topic.topic.strip():
-        raise HTTPException(status_code=400, detail="Topic text cannot be empty.")
     record = {
         "id": str(uuid.uuid4()),
         "topic": topic.topic.strip(),
@@ -176,6 +174,9 @@ async def upload_topics_csv(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only .csv files are accepted.")
 
     raw = await file.read()
+
+    if len(raw) > 5 * 1024 * 1024:  # 5 MB limit
+        raise HTTPException(status_code=400, detail="File too large. Maximum allowed size is 5 MB.")
     try:
         text = raw.decode("utf-8-sig")  # handles BOM from Excel
     except UnicodeDecodeError:
@@ -186,6 +187,9 @@ async def upload_topics_csv(file: UploadFile = File(...)):
 
     if not rows:
         raise HTTPException(status_code=400, detail="CSV file is empty.")
+
+    if len(rows) > 5001:  # allow up to 5000 data rows + 1 header
+        raise HTTPException(status_code=400, detail="CSV file too large. Maximum 5000 rows allowed.")
 
     # Detect if first row is a header
     header = [col.strip().lower() for col in rows[0]]
@@ -270,14 +274,12 @@ def list_leads():
 
 @router.post("/agents/agent2/leads", status_code=201)
 def create_lead(lead: LeadCreate):
-    if not lead.email.strip():
-        raise HTTPException(status_code=400, detail="Email cannot be empty.")
     record = {
         "id": str(uuid.uuid4()),
-        "email": lead.email.strip().lower(),
-        "website": lead.website.strip() if lead.website else None,
+        "email": lead.email,      # already stripped/lowercased by validator
+        "website": lead.website,  # already validated/stripped by validator
         "name": lead.name.strip() if lead.name else None,
-        "company": lead.company.strip() if lead.company else None,
+        "company": lead.company,  # already stripped by validator
         "created_at": _now(),
     }
     leads_db.append(record)

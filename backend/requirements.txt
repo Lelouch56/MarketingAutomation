@@ -8,3 +8,4 @@ anthropic>=0.25.0
 python-multipart
 pydantic>=2.0.0
 urllib3
+websockets==13.1

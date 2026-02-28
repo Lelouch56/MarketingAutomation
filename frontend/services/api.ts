@@ -86,7 +86,12 @@ function buildRunRequest() {
 // ─────────────────────────────────────────────────────────────
 
 export const agent1Api = {
-  run: () => http.post('/agents/agent1/run', buildRunRequest()),
+  run: (opts?: { wordpress?: boolean; linkedin?: boolean }) => {
+    const body = buildRunRequest();
+    if (opts?.wordpress === false) delete body.wordpress;
+    if (opts?.linkedin === false) delete body.linkedin;
+    return http.post('/agents/agent1/run', body);
+  },
 
   getStatus: (): Promise<AgentRunStatus> =>
     http.get('/agents/agent1/status').then((r) => r.data),
@@ -226,6 +231,14 @@ export const globalApi = {
 
   health: () => http.get('/health').then((r) => r.data),
 };
+
+/** Extract a human-readable error message from an API call failure. */
+export function extractApiError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    return err.response?.data?.detail ?? err.message ?? 'Request failed';
+  }
+  return err instanceof Error ? err.message : 'Unknown error';
+}
 
 export default http;
 
