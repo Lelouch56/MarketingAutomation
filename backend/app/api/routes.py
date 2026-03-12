@@ -4,20 +4,26 @@ All API routes for the Marketing Automation AI platform.
 
 import csv
 import io
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File
+from fastapi.responses import Response
 
 from app.models import (
     RunAgentRequest, AgentRunStatus, TopicCreate, LeadCreate, LLMConfigModel,
-    WordPressConfigModel, LinkedInConfigModel, KlentyConfigModel, OutplayConfigModel,
+    WordPressConfigModel, LinkedInConfigModel, KlentyConfigModel, OutplayConfigModel, ApolloConfigModel,
+    SalesNavigatorConfigModel, HubSpotConfigModel, PhantomBusterConfigModel,
 )
 from app.core.llm_provider import LLMConfig
 from app.core.integrations import (
-    WordPressConfig, LinkedInConfig, KlentyConfig, OutplayConfig,
+    WordPressConfig, LinkedInConfig, KlentyConfig, OutplayConfig, ApolloConfig, SalesNavigatorConfig, HubSpotConfig,
+    PhantomBusterConfig,
     test_wordpress_connection, test_linkedin_connection, test_klenty_connection, test_outplay_connection,
+    test_apollo_connection, test_sales_navigator_connection, test_hubspot_connection,
+    test_phantombuster_connection,
     publish_to_wordpress, post_to_linkedin,
 )
 from app.storage.json_db import JsonDB
@@ -101,6 +107,49 @@ def _build_outplay_config(request: RunAgentRequest) -> Optional[OutplayConfig]:
         sequence_name_a=request.outplay.sequence_name_a,
         sequence_name_b=request.outplay.sequence_name_b,
         sequence_name_c=request.outplay.sequence_name_c,
+    )
+
+
+def _build_apollo_config(request: RunAgentRequest) -> Optional[ApolloConfig]:
+    """Extract Apollo config from request if provided."""
+    if not request.apollo:
+        return None
+    return ApolloConfig(
+        api_key=request.apollo.api_key,
+        per_page=request.apollo.per_page,
+    )
+
+
+def _build_sales_navigator_config(request: RunAgentRequest) -> Optional[SalesNavigatorConfig]:
+    """Extract Sales Navigator config from request if provided."""
+    if not request.sales_navigator:
+        return None
+    return SalesNavigatorConfig(
+        access_token=request.sales_navigator.access_token,
+        count=request.sales_navigator.count,
+    )
+
+
+def _build_hubspot_config(request: RunAgentRequest) -> Optional[HubSpotConfig]:
+    """Extract HubSpot config from request if provided."""
+    if not request.hubspot:
+        return None
+    return HubSpotConfig(
+        access_token=request.hubspot.access_token,
+        max_contacts=request.hubspot.max_contacts,
+    )
+
+
+def _build_phantombuster_config(request: RunAgentRequest) -> Optional[PhantomBusterConfig]:
+    """Extract PhantomBuster config from request if provided."""
+    if not request.phantombuster:
+        return None
+    return PhantomBusterConfig(
+        api_key=request.phantombuster.api_key,
+        search_phantom_id=request.phantombuster.search_phantom_id,
+        connection_phantom_id=request.phantombuster.connection_phantom_id,
+        session_cookie=request.phantombuster.session_cookie,
+        connections_per_launch=request.phantombuster.connections_per_launch,
     )
 
 
@@ -237,6 +286,86 @@ def list_blogs():
     return blogs_db.read()
 
 
+@router.get("/agents/agent1/blogs/{blog_id}/download")
+def download_blog(blog_id: str, format: str = "html"):
+    """
+    Download a blog's content.
+    format=html  → full standalone HTML file (blog post)
+    format=linkedin → LinkedIn post as plain text file
+    """
+    all_blogs = blogs_db.read()
+    blog = next((b for b in all_blogs if b.get("id") == blog_id), None)
+    if not blog:
+        raise HTTPException(status_code=404, detail=f"Blog '{blog_id}' not found.")
+
+    slug = blog.get("slug") or re.sub(r"[^a-z0-9]+", "-", blog.get("topic", "post").lower()).strip("-")
+
+    if format == "linkedin":
+        post_text = blog.get("linkedin_post", "")
+        hashtags = blog.get("linkedin_hashtags", [])
+        if hashtags:
+            post_text += "\n\n" + " ".join(f"#{h.lstrip('#')}" for h in hashtags)
+        if not post_text:
+            raise HTTPException(status_code=404, detail="No LinkedIn post found for this blog.")
+        content = post_text.encode("utf-8")
+        return Response(
+            content=content,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="linkedin-{slug}.txt"'},
+        )
+
+    # Default: HTML
+    title = blog.get("title", blog.get("topic", "Blog Post"))
+    meta_desc = blog.get("meta_description", "")
+    content_html = blog.get("content_html", "<p>No content available.</p>")
+    quality_score = blog.get("quality_score", "")
+    blog_url = blog.get("blog_url", "")
+    created_at = blog.get("created_at", "")[:10] if blog.get("created_at") else ""
+
+    html_doc = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="{meta_desc}">
+  <title>{title}</title>
+  <style>
+    body {{ font-family: Georgia, 'Times New Roman', serif; max-width: 820px; margin: 0 auto; padding: 48px 24px; line-height: 1.75; color: #222; background: #fff; }}
+    h1 {{ font-size: 2rem; line-height: 1.25; margin-bottom: 0.4rem; color: #111; }}
+    h2 {{ font-size: 1.4rem; margin-top: 2rem; color: #111; }}
+    h3 {{ font-size: 1.15rem; margin-top: 1.5rem; color: #222; }}
+    .meta {{ color: #666; font-size: 0.875rem; border-bottom: 1px solid #e5e5e5; padding-bottom: 1rem; margin-bottom: 2rem; }}
+    .meta a {{ color: #0066cc; text-decoration: none; }}
+    p {{ margin: 0.9rem 0; }}
+    a {{ color: #0066cc; }}
+    ul, ol {{ padding-left: 1.5rem; }}
+    li {{ margin-bottom: 0.4rem; }}
+    blockquote {{ border-left: 3px solid #ccc; margin: 1.5rem 0; padding: 0.5rem 1.25rem; color: #555; font-style: italic; }}
+    .faq-section {{ background: #f9f9f9; border: 1px solid #e5e5e5; border-radius: 6px; padding: 1.5rem; margin-top: 2rem; }}
+    .cta-section {{ background: #f0f7ff; border: 1px solid #c3d9f0; border-radius: 6px; padding: 1.25rem 1.5rem; margin-top: 2rem; }}
+  </style>
+</head>
+<body>
+  <h1>{title}</h1>
+  <div class="meta">
+    <p>{meta_desc}</p>
+    <p>
+      {f'Quality Score: <strong>{quality_score}/100</strong> &nbsp;·&nbsp; ' if quality_score else ''}
+      {f'<a href="{blog_url}" target="_blank">View published post</a> &nbsp;·&nbsp; ' if blog_url else ''}
+      {f'Generated: {created_at}' if created_at else ''}
+    </p>
+  </div>
+  {content_html}
+</body>
+</html>"""
+
+    return Response(
+        content=html_doc.encode("utf-8"),
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{slug}.html"'},
+    )
+
+
 # ─────────────────────────────────────────────────────────────
 # AGENT 2 ROUTES
 # ─────────────────────────────────────────────────────────────
@@ -250,14 +379,16 @@ def run_agent2(request: RunAgentRequest, background_tasks: BackgroundTasks):
     config = _model_to_config(request.llm_config)
     klenty_config = _build_klenty_config(request)
     outplay_config = _build_outplay_config(request)
+    hubspot_config = _build_hubspot_config(request)
 
-    background_tasks.add_task(run_agent2_background, config, klenty_config, outplay_config)
+    background_tasks.add_task(run_agent2_background, config, klenty_config, outplay_config, hubspot_config)
     _append_log("info", "Agent 2 started by user", agent_id="agent2",
                 metadata={
                     "provider": config.provider,
                     "model": config.model,
                     "klenty": klenty_config is not None,
                     "outplay": outplay_config is not None,
+                    "hubspot": hubspot_config is not None,
                 })
     return {"status": "started", "message": "Agent 2 (Lead Qualification) has started."}
 
@@ -270,6 +401,44 @@ def agent2_status():
 @router.get("/agents/agent2/leads")
 def list_leads():
     return leads_db.read()
+
+
+@router.get("/agents/agent2/leads/download")
+def download_leads(campaign: Optional[str] = None):
+    """
+    Download leads analysis as CSV.
+    ?campaign=A|B|C|notify_rupesh|all  (default: all)
+    """
+    all_leads = leads_db.read()
+
+    if campaign and campaign.lower() != "all":
+        filtered = [l for l in all_leads if l.get("campaign") == campaign]
+    else:
+        filtered = all_leads
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=[
+        "email", "name", "company", "website", "source",
+        "category", "analysis_status", "score", "industry_fit", "company_type",
+        "campaign", "campaign_label",
+        "reasoning", "signals", "concerns",
+        "klenty_enrolled", "outplay_enrolled",
+        "processed_at", "created_at",
+    ], extrasaction="ignore")
+    writer.writeheader()
+    for lead in filtered:
+        row = dict(lead)
+        row["signals"] = "; ".join(lead.get("signals") or [])
+        row["concerns"] = "; ".join(lead.get("concerns") or [])
+        writer.writerow(row)
+
+    suffix = f"-campaign-{campaign}" if campaign and campaign.lower() != "all" else ""
+    filename = f"leads-analysis{suffix}.csv"
+    return Response(
+        content=output.getvalue().encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/agents/agent2/leads", status_code=201)
@@ -300,14 +469,23 @@ def run_agent3(request: RunAgentRequest, background_tasks: BackgroundTasks):
     config = _model_to_config(request.llm_config)
     klenty_config = _build_klenty_config(request)
     outplay_config = _build_outplay_config(request)
+    apollo_config = _build_apollo_config(request)
+    sales_nav_config = _build_sales_navigator_config(request)
+    phantombuster_config = _build_phantombuster_config(request)
 
-    background_tasks.add_task(run_agent3_background, config, klenty_config, outplay_config)
+    background_tasks.add_task(
+        run_agent3_background, config, klenty_config, outplay_config, apollo_config, sales_nav_config,
+        phantombuster_config
+    )
     _append_log("info", "Agent 3 started by user", agent_id="agent3",
                 metadata={
                     "provider": config.provider,
                     "model": config.model,
                     "klenty": klenty_config is not None,
                     "outplay": outplay_config is not None,
+                    "apollo": apollo_config is not None,
+                    "sales_navigator": sales_nav_config is not None,
+                    "phantombuster": phantombuster_config is not None,
                 })
     return {"status": "started", "message": "Agent 3 (LinkedIn Outbound Automation) has started."}
 
@@ -376,35 +554,24 @@ def list_agents():
 
     return [
         {
-            "id": "agent1",
-            "name": "Content Writer & SEO",
-            "description": "AI-powered blog generation, SEO optimization, internal linking, quality check, and LinkedIn post creation.",
-            "type": "Content Automation",
-            "schedule": "Daily",
-            "status": a1.status,
-            "steps_count": 7,
-            "last_run": a1.completed_at,
-            "implemented": True,
-        },
-        {
             "id": "agent2",
             "name": "Lead Qualification",
-            "description": "Deduplicates leads, scrapes company websites, AI-scores for travel industry fit, and auto-enrolls into Klenty campaigns.",
+            "description": "Deduplicates leads, scrapes company websites, AI-scores for travel industry fit, seeds blog topics to Agent 1, and auto-enrolls into Klenty/Outplay campaigns.",
             "type": "Lead Automation",
             "schedule": "Hourly",
             "status": a2.status,
-            "steps_count": 7,
+            "steps_count": 8,
             "last_run": a2.completed_at,
             "implemented": True,
         },
         {
             "id": "agent3",
             "name": "LinkedIn Outbound",
-            "description": "AI-generates B2B prospect profiles, filters decision-makers, and auto-enrolls approved targets into Klenty email sequences.",
+            "description": "Reads Agent 2 hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved prospects.",
             "type": "Outreach Automation",
             "schedule": "6x Daily",
             "status": a3.status,
-            "steps_count": 7,
+            "steps_count": 8,
             "last_run": a3.completed_at,
             "implemented": True,
         },
@@ -417,6 +584,17 @@ def list_agents():
             "status": a4.status,
             "steps_count": 6,
             "last_run": a4.completed_at,
+            "implemented": True,
+        },
+        {
+            "id": "agent1",
+            "name": "Content Writer & SEO",
+            "description": "Picks pending topics (seeded by Agent 2 or added manually), generates SEO-optimized blogs, runs quality checks, creates LinkedIn posts, and publishes to WordPress.",
+            "type": "Content Automation",
+            "schedule": "Daily",
+            "status": a1.status,
+            "steps_count": 8,
+            "last_run": a1.completed_at,
             "implemented": True,
         },
     ]
@@ -524,3 +702,46 @@ def test_outplay(config: OutplayConfigModel):
         sequence_name_c=config.sequence_name_c,
     )
     return test_outplay_connection(outplay_config)
+
+
+@router.post("/integrations/test/apollo")
+def test_apollo(config: ApolloConfigModel):
+    """Test Apollo.io API connection."""
+    apollo_config = ApolloConfig(
+        api_key=config.api_key,
+        per_page=config.per_page,
+    )
+    return test_apollo_connection(apollo_config)
+
+
+@router.post("/integrations/test/sales-navigator")
+def test_sales_navigator(config: SalesNavigatorConfigModel):
+    """Test LinkedIn Sales Navigator SNAP API connection."""
+    sn_config = SalesNavigatorConfig(
+        access_token=config.access_token,
+        count=config.count,
+    )
+    return test_sales_navigator_connection(sn_config)
+
+
+@router.post("/integrations/test/hubspot")
+def test_hubspot(config: HubSpotConfigModel):
+    """Test HubSpot CRM API connection."""
+    hs_config = HubSpotConfig(
+        access_token=config.access_token,
+        max_contacts=config.max_contacts,
+    )
+    return test_hubspot_connection(hs_config)
+
+
+@router.post("/integrations/test/phantombuster")
+def test_phantombuster(config: PhantomBusterConfigModel):
+    """Test PhantomBuster API connection."""
+    pb_config = PhantomBusterConfig(
+        api_key=config.api_key,
+        search_phantom_id=config.search_phantom_id,
+        connection_phantom_id=config.connection_phantom_id,
+        session_cookie=config.session_cookie,
+        connections_per_launch=config.connections_per_launch,
+    )
+    return test_phantombuster_connection(pb_config)

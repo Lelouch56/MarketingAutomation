@@ -2,26 +2,46 @@
   {
     "id": "1a2b3c4d-0001-0001-0001-000000000001",
     "topic": "Hotel Technology Trends 2026",
-    "status": "Pending",
-    "created_at": "2026-02-20T09:00:00+00:00"
+    "status": "Published",
+    "created_at": "2026-02-20T09:00:00+00:00",
+    "url": "https://vervotech.com/blog/hotel-technology-trends-2026",
+    "blog_title": "Hotel Tech 2026",
+    "quality_score": 82,
+    "linkedin_post": "What does the future of hotel technology hold? As we dive into 2026, it's clear that the hotel industry is on the cusp of a significant transformation, driven by technological advancements and shifting traveler behaviors. To stay ahead of the curve, it's essential for Online Travel Agencies (OTAs), B2B travel platforms, Travel Management Companies (TMCs), and hotel chains to adapt to the latest trends. Our latest blog article, 'Hotel Tech 2026', explores the emerging technologies set to revolutionize the hotel industry. Here are a few key insights: Artificial Intelligence (AI) is being leveraged to enhance the guest experience, from personalized recommendations to automated check-in processes. Additionally, the integration of emerging technologies such as AI, Virtual Reality (VR), and the Internet of Things (IoT) will continue to play a vital role in shaping the future of hotel technology. Furthermore, the use of data analytics will become increasingly important for hotels to gain valuable insights into guest behavior and preferences, enabling them to make informed decisions and drive revenue growth. To learn more about the latest hotel technology trends and how they can benefit your business, read our full article: https://vervotech.com/blog/hotel-technology-trends-2026",
+    "updated_at": "2026-03-09T11:39:28.308262+00:00"
   },
   {
     "id": "1a2b3c4d-0001-0001-0001-000000000002",
     "topic": "OTA API Integration Best Practices",
-    "status": "Pending",
-    "created_at": "2026-02-20T09:05:00+00:00"
+    "status": "Published",
+    "created_at": "2026-02-20T09:05:00+00:00",
+    "url": "https://vervotech.com/blog/ota-api-integration-best-practices",
+    "blog_title": "OTA API Integration",
+    "quality_score": 82,
+    "linkedin_post": "Are you leveraging the full potential of API integrations to boost your online travel agency's revenue? A well-implemented API integration can be a game-changer, providing a seamless user experience and increasing bookings. In the travel industry, Application Programming Interfaces (APIs) play a crucial role in accessing a vast inventory of travel products and services. A successful API integration can make all the difference in providing a competitive edge. Our latest blog article highlights the best practices for OTA API integration, including the importance of choosing the right API provider, implementing robust error handling mechanisms, and ensuring seamless data mapping. By following these best practices, you can avoid common pitfalls and ensure a smooth API integration process. For instance, selecting the right API provider can help you access a wider range of travel products and services, while robust error handling mechanisms can minimize downtime and ensure a seamless user experience. Moreover, proper data mapping can help you avoid data inconsistencies and ensure accurate booking information. To learn more about how to optimize your OTA API integration and stay ahead of the competition, read our latest blog article.",
+    "updated_at": "2026-03-09T11:51:33.076717+00:00"
   },
   {
     "id": "1a2b3c4d-0001-0001-0001-000000000003",
     "topic": "Hotel Content Standardization for Global Booking Platforms",
-    "status": "Pending",
-    "created_at": "2026-02-20T09:10:00+00:00"
+    "status": "Published",
+    "created_at": "2026-02-20T09:10:00+00:00",
+    "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms",
+    "blog_title": "Hotel Content Standard",
+    "quality_score": 82,
+    "linkedin_post": "Are you tired of inconsistent hotel content hindering your travel platform's user experience? **Accurate and standardized hotel content is no longer a luxury, but a necessity**. As the travel industry continues to grow, Online Travel Agencies (OTAs), B2B travel platforms, and Travel Management Companies (TMCs) face the challenge of providing seamless booking experiences. In our latest blog post, we discuss the importance of hotel content standardization and its benefits. Key insights include: hotel content standardization can reduce errors and increase customer satisfaction, it enables travel platforms to provide a more personalized experience, and it can be achieved through the implementation of standardized data formats and automated content processing. By standardizing hotel content, travel platforms can ensure that their users have access to accurate and consistent information, leading to increased bookings and revenue. To learn more about the importance of hotel content standardization and how to achieve it, read our latest blog post to discover the secrets to a seamless booking experience. Read the full article here: https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms",
+    "updated_at": "2026-03-09T12:25:28.113137+00:00"
   },
   {
     "id": "1a2b3c4d-0001-0001-0001-000000000004",
     "topic": "AI and Machine Learning in Travel Data Management",
-    "status": "Pending",
-    "created_at": "2026-02-20T09:15:00+00:00"
+    "status": "Published",
+    "created_at": "2026-02-20T09:15:00+00:00",
+    "url": "https://vervotech.com/blog/ai-and-machine-learning-in-travel-data-management",
+    "blog_title": "AI in Travel",
+    "quality_score": 82,
+    "linkedin_post": "Are you ready to unlock the full potential of travel data? The travel industry is experiencing an unprecedented surge in online bookings, resulting in a massive explosion of travel-related data. This has created a significant challenge for Online Travel Agencies (OTAs), Travel Management Companies (TMCs), and B2B travel platforms to manage and leverage this data effectively. Artificial Intelligence (AI) and Machine Learning (ML) are revolutionizing the way travel companies approach data management, enabling them to make data-driven decisions, improve operational efficiency, and enhance customer experiences. Key insights from our latest blog article, 'AI in Travel', reveal that AI-powered travel solutions can help personalize travel recommendations, predict demand, and optimize pricing strategies. Moreover, ML algorithms can help identify patterns in travel behavior, enabling travel companies to develop targeted marketing campaigns and improve customer engagement. By embracing AI and ML, travel companies can gain a competitive edge in the market and stay ahead of the curve. To learn more about the role of AI and ML in travel data management and how you can leverage these technologies to drive business growth, read our latest blog article now: https://vervotech.com/blog/ai-and-machine-learning-in-travel-data-management",
+    "updated_at": "2026-03-10T06:30:43.007662+00:00"
   },
   {
     "id": "1a2b3c4d-0001-0001-0001-000000000005",
@@ -51,5 +71,269 @@
     "topic": "otm",
     "status": "Pending",
     "created_at": "2026-02-25T18:13:36.818357+00:00"
+  },
+  {
+    "id": "a7f4bf0f-3b30-4d3d-a7c3-503a22d38f03",
+    "topic": "Optimizing Travel Accommodations for Student Exchange Programs: The Role of Accurate Hotel Mapping",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:22:33.335584+00:00",
+    "source": "web_scrape",
+    "source_company": "https://iesmartinezm.es",
+    "source_lead_email": "grivote615@iesmartinezm.es",
+    "llm_relevance": "This topic is relevant to the company as it participates in student exchange programs like Erasmus Escolar and may need to arrange accommodations for students, which requires accurate hotel mapping. Vervotech's hotel content API and mapping solution can help optimize this process.",
+    "relevance_score": 80
+  },
+  {
+    "id": "9dde7f83-ff56-4095-aa7c-536ec5d7721c",
+    "topic": "Streamlining Travel Planning for Educational Trips: How High-Quality Hotel Content Can Enhance the Experience",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:22:33.340325+00:00",
+    "source": "web_scrape",
+    "source_company": "https://iesmartinezm.es",
+    "source_lead_email": "grivote615@iesmartinezm.es",
+    "llm_relevance": "The company organizes trips for students, such as the visit to Munster, Germany, and high-quality hotel content can help streamline travel planning. Vervotech's solutions can provide the necessary data quality to enhance the travel experience.",
+    "relevance_score": 85
+  },
+  {
+    "id": "7d3eb631-a7bf-42c8-93fe-5cd794f4f47c",
+    "topic": "Solving Hotel Content Inaccuracy: Strategies for Wholesalers to Improve Booking Conversions",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:22:38.963296+00:00",
+    "source": "web_scrape",
+    "source_company": "https://partocrs.com",
+    "source_lead_email": "s.bakhshi@partocrs.com",
+    "llm_relevance": "This topic attracts Parto CRS as it addresses a common pain point in the travel industry, particularly for wholesalers who rely on accurate hotel content to drive bookings. By discussing strategies to improve data quality, Vervotech can naturally introduce its hotel content API and mapping solutions.",
+    "relevance_score": 90
+  },
+  {
+    "id": "affee045-16f8-4f09-8670-31f2e01653cc",
+    "topic": "Optimizing Hotel Inventory with Advanced Mapping Technology: A Guide for Travel Wholesalers",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:22:38.972383+00:00",
+    "source": "web_scrape",
+    "source_company": "https://partocrs.com",
+    "source_lead_email": "s.bakhshi@partocrs.com",
+    "llm_relevance": "This topic is relevant to Parto CRS as it highlights the importance of accurate hotel mapping in optimizing inventory and improving the booking experience. Vervotech's mapping solutions can be showcased as a key component in addressing this challenge.",
+    "relevance_score": 85
+  },
+  {
+    "id": "b750bd58-e940-457e-ba1d-c83d9a12d932",
+    "topic": "Streamlining Travel Services with Accurate Hotel Mapping: A Key to Sustainable Tourism",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:14.238934+00:00",
+    "source": "web_scrape",
+    "source_company": "https://greencontinenttours.com",
+    "source_lead_email": "info@greencontinenttours.com",
+    "llm_relevance": "This topic attracts Green Continent Tours as it highlights the importance of accurate hotel mapping in providing high-quality services to customers, aligning with their goal of being a one-stop travel shop. By leveraging Vervotech's hotel content API and mapping solutions, travel companies can ensure a seamless experience for their clients.",
+    "relevance_score": 90
+  },
+  {
+    "id": "1b18611e-9451-47da-b848-920d4d9759cb",
+    "topic": "Enhancing Customer Experience through Data-Driven Travel Services: The Role of Hotel Content APIs",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:14.244596+00:00",
+    "source": "web_scrape",
+    "source_company": "https://greencontinenttours.com",
+    "source_lead_email": "info@greencontinenttours.com",
+    "llm_relevance": "This topic resonates with Green Continent Tours' focus on maintaining constant contact with clients and monitoring services to ensure a smooth experience. By integrating Vervotech's hotel content API, travel companies can access reliable and up-to-date hotel information, enabling them to provide personalized and sustainable travel experiences.",
+    "relevance_score": 88
+  },
+  {
+    "id": "bb75bd23-0567-4c07-a992-332dc07636e6",
+    "topic": "Improving Travel Recommendations for University Events: How Accurate Hotel Mapping Can Enhance Attendee Experience",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:20.022070+00:00",
+    "source": "web_scrape",
+    "source_company": "https://ucc.edu.ar",
+    "source_lead_email": "1806974@ucc.edu.ar",
+    "llm_relevance": "This topic is relevant to the University Cat\u00f3lica de C\u00f3rdoba as they host various events and conferences, and accurate hotel mapping can help improve the experience for attendees. By discussing the importance of accurate hotel mapping, Vervotech can showcase its expertise in this area and attract the university's attention to its solutions.",
+    "relevance_score": 80
+  },
+  {
+    "id": "6f8af7de-4bc4-43da-87f4-d15023252c7f",
+    "topic": "Streamlining Travel Arrangements for Students and Staff: The Role of High-Quality Hotel Content in University Travel Planning",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:20.031684+00:00",
+    "source": "web_scrape",
+    "source_company": "https://ucc.edu.ar",
+    "source_lead_email": "1806974@ucc.edu.ar",
+    "llm_relevance": "The university's emphasis on internationalization and collaboration with other institutions implies a need for efficient travel planning. By highlighting the benefits of high-quality hotel content, Vervotech can demonstrate how its solutions can support the university's travel planning needs and improve the overall experience for students and staff.",
+    "relevance_score": 82
+  },
+  {
+    "id": "c0fe2896-6d5f-4b73-8ae9-e1a670909724",
+    "topic": "Optimizing Hotel Search Results with Accurate Mapping and Content Enrichment",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:25.618072+00:00",
+    "source": "web_scrape",
+    "source_company": "https://florida.com",
+    "source_lead_email": "hialeagh@florida.com",
+    "llm_relevance": "This topic is relevant to Florida.com as it addresses the challenge of providing accurate and comprehensive hotel search results, which is a key feature on their website. By discussing the importance of mapping and content enrichment, Vervotech can naturally highlight its solutions and expertise in this area.",
+    "relevance_score": 90
+  },
+  {
+    "id": "5eb9ec90-708a-463f-a1f0-ca29370019bc",
+    "topic": "Improving Hotel Data Quality to Enhance User Experience and Increase Bookings",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:25.627300+00:00",
+    "source": "web_scrape",
+    "source_company": "https://florida.com",
+    "source_lead_email": "hialeagh@florida.com",
+    "llm_relevance": "This topic speaks to Florida.com's goal of providing the best possible user experience and driving bookings. By focusing on the importance of high-quality hotel data, Vervotech can showcase its expertise in data quality and how its solutions can help travel companies like Florida.com achieve their goals.",
+    "relevance_score": 85
+  },
+  {
+    "id": "a78ba529-ef3f-4a13-a45f-2357f9f56db0",
+    "topic": "Improving Event Accommodation Experiences: How High-Quality Hotel Content Can Enhance Attendee Satisfaction",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:31.187219+00:00",
+    "source": "web_scrape",
+    "source_company": "https://emiratesexhibits.com",
+    "source_lead_email": "ahamed@emiratesexhibits.com",
+    "llm_relevance": "This topic attracts Emirates Exhibits, an event and exhibition contractor, as it highlights the importance of quality hotel content in enhancing attendee experiences, which can lead to increased customer satisfaction and loyalty. Vervotech's hotel content API can provide the necessary high-quality content to support this goal.",
+    "relevance_score": 85
+  },
+  {
+    "id": "173fda50-f1a0-46bf-9c51-596772a33c77",
+    "topic": "Optimizing Event Travel Planning with Accurate Hotel Mapping and Data",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:31.195148+00:00",
+    "source": "web_scrape",
+    "source_company": "https://emiratesexhibits.com",
+    "source_lead_email": "ahamed@emiratesexhibits.com",
+    "llm_relevance": "This topic is relevant to Emirates Exhibits as it addresses the need for accurate hotel mapping and data to streamline event travel planning, which can be a challenge for event organizers. Vervotech's mapping solution can help solve this problem, making it an attractive solution for this company type.",
+    "relevance_score": 80
+  },
+  {
+    "id": "4c63b6bb-7486-42d0-a210-6b9049aa72ce",
+    "topic": "Solving the Duplicate Hotel Inventory Problem: Strategies for Online Travel Companies",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:36.892455+00:00",
+    "source": "web_scrape",
+    "source_company": "https://vervotech.com",
+    "source_lead_email": "padma@vervotech.com",
+    "llm_relevance": "This topic addresses a specific pain point that online travel companies face, which Vervotech's hotel mapping solution can solve, making it a relevant and attractive topic for this company type. By discussing strategies to remove duplicate hotel inventory, Vervotech can naturally highlight its AI-powered mapping solution.",
+    "relevance_score": 90
+  },
+  {
+    "id": "5c7319f5-de79-4e4a-a41b-db7857cebd26",
+    "topic": "The Impact of Inaccurate Room Listings on Booking Errors: How to Improve Data Quality with NLP and Machine Learning",
+    "status": "Pending",
+    "created_at": "2026-03-12T08:41:36.905609+00:00",
+    "source": "web_scrape",
+    "source_company": "https://vervotech.com",
+    "source_lead_email": "padma@vervotech.com",
+    "llm_relevance": "This topic speaks to the challenges of maintaining accurate room listings, which is a key aspect of Vervotech's Room Mapping solution. By exploring the consequences of inaccurate room listings and presenting a solution that leverages NLP and machine learning, Vervotech can demonstrate its expertise and value proposition to online travel companies.",
+    "relevance_score": 88
+  },
+  {
+    "id": "98206681-0515-44bc-816f-e6cbe2a6f7bb",
+    "topic": "Improving Travel Itineraries with Accurate Mapping and Content: A Guide for Educational Travel Organizers",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:33:50.473837+00:00",
+    "source": "web_scrape",
+    "source_company": "https://iesmartinezm.es",
+    "source_lead_email": "grivote615@iesmartinezm.es",
+    "llm_relevance": "This topic is relevant because the company, IES Mart\u00ednez Monta\u00f1\u00e9s, appears to organize educational travel, such as the Erasmus Escolar program, and accurate mapping and content can help them create better travel itineraries. Vervotech's hotel content API and mapping solution can help them achieve this.",
+    "relevance_score": 80
+  },
+  {
+    "id": "c1c5d1d1-ad59-46f8-af07-ab40c755c640",
+    "topic": "Streamlining Travel Accommodation Booking with High-Quality Hotel Content for Group Travel",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:33:50.479540+00:00",
+    "source": "web_scrape",
+    "source_company": "https://iesmartinezm.es",
+    "source_lead_email": "grivote615@iesmartinezm.es",
+    "llm_relevance": "This topic is relevant because the company seems to be involved in organizing group travel for students and staff, and high-quality hotel content can help them make informed decisions when booking accommodations. Vervotech's hotel content API can provide them with the necessary data to streamline their booking process.",
+    "relevance_score": 82
+  },
+  {
+    "id": "56cd0c18-ecf9-4e5f-8aba-d4400715fd13",
+    "topic": "Solving Hotel Content Inconsistencies: How Wholesalers Can Enhance Their Booking Engine with Standardized Hotel Data",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:33:56.104555+00:00",
+    "source": "web_scrape",
+    "source_company": "https://partocrs.com",
+    "source_lead_email": "s.bakhshi@partocrs.com",
+    "llm_relevance": "This topic addresses the challenge of maintaining accurate and consistent hotel content, which is crucial for a wholesaler like Parto CRS that offers over 2.5 million hotels worldwide. By discussing the importance of standardized hotel data, Vervotech can naturally highlight its hotel content API and mapping solutions.",
+    "relevance_score": 90
+  },
+  {
+    "id": "2a4ee43e-526e-4c63-b9e4-fd705d56ad28",
+    "topic": "Optimizing Hotel Search Results with Accurate Mapping: A Guide for Travel Wholesalers",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:33:56.114595+00:00",
+    "source": "web_scrape",
+    "source_company": "https://partocrs.com",
+    "source_lead_email": "s.bakhshi@partocrs.com",
+    "llm_relevance": "This topic speaks to the need for travel wholesalers like Parto CRS to provide their clients with accurate and relevant hotel search results. By discussing the role of mapping in improving search results, Vervotech can showcase its expertise in hotel content mapping and data quality.",
+    "relevance_score": 85
+  },
+  {
+    "id": "e10b5c61-4459-4819-8b2a-b636a22dda21",
+    "topic": "Streamlining Travel Services: How a Unified Hotel Content API Can Enhance the B2B Travel Experience",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:34:01.736781+00:00",
+    "source": "web_scrape",
+    "source_company": "https://greencontinenttours.com",
+    "source_lead_email": "info@greencontinenttours.com",
+    "llm_relevance": "This topic resonates with Green Continent Tours as it highlights the importance of integrating various travel services, including high-quality hotel content, to provide a seamless experience for B2B clients. By leveraging a unified hotel content API, travel companies like Green Continent Tours can improve their service offerings and maintain a competitive edge.",
+    "relevance_score": 90
+  },
+  {
+    "id": "739b8b7f-d881-45da-adee-172120e0737a",
+    "topic": "Sustainable Tourism and Data Quality: The Role of Accurate Hotel Mapping in Reducing Carbon Footprint",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:34:01.745902+00:00",
+    "source": "web_scrape",
+    "source_company": "https://greencontinenttours.com",
+    "source_lead_email": "info@greencontinenttours.com",
+    "llm_relevance": "As Green Continent Tours emphasizes its commitment to sustainable and environmental-friendly approaches, this topic speaks directly to their values. By discussing the impact of accurate hotel mapping on reducing carbon footprint, Vervotech can demonstrate how its solutions support eco-friendly tourism practices.",
+    "relevance_score": 88
+  },
+  {
+    "id": "fc7fc5d7-e368-4c43-b94a-5648ed85c903",
+    "topic": "Streamlining Travel Accommodations for University Events: How Accurate Hotel Mapping Can Enhance the Guest Experience",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:34:07.573324+00:00",
+    "source": "web_scrape",
+    "source_company": "https://ucc.edu.ar",
+    "source_lead_email": "1806974@ucc.edu.ar",
+    "llm_relevance": "This topic is relevant to the Universidad Cat\u00f3lica de C\u00f3rdoba as it frequently hosts events and may have guests traveling from other locations, requiring accommodations. By discussing the importance of accurate hotel mapping, Vervotech can highlight its solutions for improving the travel experience.",
+    "relevance_score": 80
+  },
+  {
+    "id": "eebbf49b-bc3f-4a47-8463-eb293964c7af",
+    "topic": "Optimizing Travel Planning for Students and Faculty: The Role of High-Quality Hotel Content in University Travel Management",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:34:07.583093+00:00",
+    "source": "web_scrape",
+    "source_company": "https://ucc.edu.ar",
+    "source_lead_email": "1806974@ucc.edu.ar",
+    "llm_relevance": "The university's emphasis on international collaborations, research, and student exchange programs means that faculty and students frequently travel. This topic speaks to the need for reliable hotel content and mapping solutions, which Vervotech can provide, to facilitate smoother travel planning and management.",
+    "relevance_score": 82
+  },
+  {
+    "id": "1c181966-7920-4da6-9293-daf2540cff3e",
+    "topic": "Solving Hotel Data Inconsistencies: How Travel Companies Can Improve User Experience With Accurate Content",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:34:13.310348+00:00",
+    "source": "web_scrape",
+    "source_company": "https://florida.com",
+    "source_lead_email": "hialeagh@florida.com",
+    "llm_relevance": "This topic is relevant to Florida.com as it struggles with providing accurate and consistent hotel information to its users, which can lead to a poor user experience and ultimately affect its reputation. By discussing the importance of accurate hotel content, Vervotech can naturally introduce its hotel content API as a solution.",
+    "relevance_score": 90
+  },
+  {
+    "id": "dd097d37-a682-44d1-9068-931933cbd847",
+    "topic": "Optimizing Hotel Search Results With Location-Based Mapping: A Guide for Travel Companies",
+    "status": "Pending",
+    "created_at": "2026-03-12T09:34:13.320343+00:00",
+    "source": "web_scrape",
+    "source_company": "https://florida.com",
+    "source_lead_email": "hialeagh@florida.com",
+    "llm_relevance": "As Florida.com is promoting its new mobile app with location-based features, it's likely to face challenges in providing accurate location-based hotel search results. This topic can help Vervotech showcase its mapping capabilities and how they can help travel companies like Florida.com improve their search functionality.",
+    "relevance_score": 85
   }
 ]

@@ -55,8 +55,9 @@ STEP_DEFINITIONS = [
     (3, "internal_linking"),
     (4, "quality_check"),
     (5, "generate_linkedin"),
-    (6, "publish"),
-    (7, "save_results"),
+    (6, "publish_wordpress"),
+    (7, "publish_linkedin"),
+    (8, "save_results"),
 ]
 
 
@@ -92,7 +93,7 @@ def _update_step(step_num: int, status: str, message: str = "") -> None:
             step.message = message
         if status == "running":
             step.started_at = _now()
-        elif status in ("completed", "failed", "skipped"):
+        elif status in ("completed", "failed", "skipped", "warning"):
             step.completed_at = _now()
 
 
@@ -340,41 +341,48 @@ def run_agent1_background(
         )
         time.sleep(4)  # Throttle: stay within free-tier RPM limits
 
-        # ── Step 5: LinkedIn post ───────────────────────────────────────
+        # ── Step 5: Generate LinkedIn post text ─────────────────────────
         blog_url_temp = f"https://vervotech.com/blog/{blog_data.get('slug', 'post')}"
-        _update_step(5, "running", "Creating LinkedIn post...")
+        _update_step(5, "running", "Creating LinkedIn post text...")
         linkedin_data = _step5_generate_linkedin(blog_data, blog_url_temp, llm_config)
         has_post = bool(linkedin_data.get("post_text"))
         _update_step(5, "completed" if has_post else "skipped",
-                     "Post created" if has_post else "Skipped")
+                     "Post text created" if has_post else "No post text generated")
 
-        # ── Step 6: Publish ─────────────────────────────────────────────
-        wp_mode = "WordPress" if wp_config else "demo mode"
-        _update_step(6, "running", f"Publishing to {wp_mode}...")
-        try:
-            blog_url, was_real = _step6_publish(blog_data, wp_config)
-            pub_msg = f"Published to WordPress: {blog_url}" if was_real else f"Mock URL: {blog_url}"
-            _update_step(6, "completed", pub_msg)
-        except IntegrationError as e:
-            # Fall back to mock on WP failure
+        # ── Step 6: Publish to WordPress ────────────────────────────────
+        if wp_config:
+            _update_step(6, "running", "Publishing to WordPress...")
+            try:
+                blog_url, was_real = _step6_publish(blog_data, wp_config)
+                _update_step(6, "completed", f"Published: {blog_url}")
+            except IntegrationError as e:
+                slug = blog_data.get("slug", "untitled-post")
+                blog_url = f"https://vervotech.com/blog/{slug}"
+                _update_step(6, "warning", f"WordPress failed — using mock URL. Reason: {str(e)}")
+        else:
             slug = blog_data.get("slug", "untitled-post")
             blog_url = f"https://vervotech.com/blog/{slug}"
-            _update_step(6, "completed", f"WP failed ({str(e)[:80]}), using mock URL")
+            _update_step(6, "skipped", f"WordPress not configured — mock URL: {blog_url}")
 
-        # ── Step 5b: Post to LinkedIn (after we have the real blog URL) ─
+        # ── Step 7: Publish to LinkedIn ──────────────────────────────────
         if li_config and linkedin_data.get("post_text"):
+            _update_step(7, "running", "Posting to LinkedIn...")
             try:
-                _update_step(5, "running", "Posting to LinkedIn...")
                 posted = _step5b_post_linkedin(linkedin_data, blog_url, li_config)
                 if posted:
-                    _update_step(5, "completed", "Posted to LinkedIn ✓")
+                    _update_step(7, "completed", "Posted to LinkedIn successfully")
+                else:
+                    _update_step(7, "skipped", "No post text to publish")
             except IntegrationError as e:
-                _update_step(5, "completed", f"LinkedIn post failed: {str(e)[:80]}")
+                _update_step(7, "warning", f"LinkedIn post failed: {str(e)}")
+        else:
+            reason = "LinkedIn not configured" if not li_config else "No post text generated"
+            _update_step(7, "skipped", reason)
 
-        # ── Step 7: Save results ────────────────────────────────────────
-        _update_step(7, "running", "Saving results to database...")
+        # ── Step 8: Save results ─────────────────────────────────────────
+        _update_step(8, "running", "Saving results to database...")
         _step7_save_results(topic_dict, blog_data, quality_data, linkedin_data, blog_url)
-        _update_step(7, "completed", "Results saved")
+        _update_step(8, "completed", "Results saved")
 
         _set_run_status("completed", result={
             "topic": topic_dict["topic"],
@@ -399,13 +407,13 @@ def run_agent1_background(
             (s.step_number for s in _run_state.steps if s.status == "running"),
             2
         )
-        _update_step(current_step, "failed", f"AI error: {str(e)[:200]}")
-        _set_run_status("failed", error=f"LLM error: {str(e)[:200]}")
+        _update_step(current_step, "failed", f"AI error: {str(e)}")
+        _set_run_status("failed", error=f"LLM error: {str(e)}")
 
     except Exception as e:
         current_step = next(
             (s.step_number for s in _run_state.steps if s.status == "running"),
             1
         )
-        _update_step(current_step, "failed", str(e)[:200])
-        _set_run_status("failed", error=str(e)[:200])
+        _update_step(current_step, "failed", str(e))
+        _set_run_status("failed", error=str(e))

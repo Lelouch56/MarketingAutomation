@@ -4,6 +4,10 @@ import {
   LinkedInConfig,
   KlentyConfig,
   OutplayConfig,
+  ApolloConfig,
+  SalesNavigatorConfig,
+  HubSpotConfig,
+  PhantomBusterConfig,
   AgentRunStatus,
   LogEntry,
   LS_LLM_CONFIG,
@@ -16,6 +20,10 @@ import {
   LS_LINKEDIN_CONFIG,
   LS_KLENTY_CONFIG,
   LS_OUTPLAY_CONFIG,
+  LS_APOLLO_CONFIG,
+  LS_SALES_NAVIGATOR_CONFIG,
+  LS_HUBSPOT_CONFIG,
+  LS_PHANTOMBUSTER_CONFIG,
 } from '../types';
 
 const isBrowser = typeof window !== 'undefined';
@@ -138,6 +146,102 @@ export function setOutplayConfig(config: OutplayConfig): void {
 export function clearOutplayConfig(): void {
   if (!isBrowser) return;
   localStorage.removeItem(LS_OUTPLAY_CONFIG);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Apollo Configuration
+// ─────────────────────────────────────────────────────────────
+
+export function getApolloConfig(): ApolloConfig | null {
+  if (!isBrowser) return null;
+  try {
+    const raw = localStorage.getItem(LS_APOLLO_CONFIG);
+    return raw ? (JSON.parse(raw) as ApolloConfig) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setApolloConfig(config: ApolloConfig): void {
+  if (!isBrowser) return;
+  localStorage.setItem(LS_APOLLO_CONFIG, JSON.stringify(config));
+}
+
+export function clearApolloConfig(): void {
+  if (!isBrowser) return;
+  localStorage.removeItem(LS_APOLLO_CONFIG);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Sales Navigator Configuration
+// ─────────────────────────────────────────────────────────────
+
+export function getSalesNavigatorConfig(): SalesNavigatorConfig | null {
+  if (!isBrowser) return null;
+  try {
+    const raw = localStorage.getItem(LS_SALES_NAVIGATOR_CONFIG);
+    return raw ? (JSON.parse(raw) as SalesNavigatorConfig) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setSalesNavigatorConfig(config: SalesNavigatorConfig): void {
+  if (!isBrowser) return;
+  localStorage.setItem(LS_SALES_NAVIGATOR_CONFIG, JSON.stringify(config));
+}
+
+export function clearSalesNavigatorConfig(): void {
+  if (!isBrowser) return;
+  localStorage.removeItem(LS_SALES_NAVIGATOR_CONFIG);
+}
+
+// ─────────────────────────────────────────────────────────────
+// HubSpot Configuration
+// ─────────────────────────────────────────────────────────────
+
+export function getHubSpotConfig(): HubSpotConfig | null {
+  if (!isBrowser) return null;
+  try {
+    const raw = localStorage.getItem(LS_HUBSPOT_CONFIG);
+    return raw ? (JSON.parse(raw) as HubSpotConfig) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setHubSpotConfig(config: HubSpotConfig): void {
+  if (!isBrowser) return;
+  localStorage.setItem(LS_HUBSPOT_CONFIG, JSON.stringify(config));
+}
+
+export function clearHubSpotConfig(): void {
+  if (!isBrowser) return;
+  localStorage.removeItem(LS_HUBSPOT_CONFIG);
+}
+
+// ─────────────────────────────────────────────────────────────
+// PhantomBuster Configuration
+// ─────────────────────────────────────────────────────────────
+
+export function getPhantomBusterConfig(): PhantomBusterConfig | null {
+  if (!isBrowser) return null;
+  try {
+    const raw = localStorage.getItem(LS_PHANTOMBUSTER_CONFIG);
+    return raw ? (JSON.parse(raw) as PhantomBusterConfig) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setPhantomBusterConfig(config: PhantomBusterConfig): void {
+  if (!isBrowser) return;
+  localStorage.setItem(LS_PHANTOMBUSTER_CONFIG, JSON.stringify(config));
+}
+
+export function clearPhantomBusterConfig(): void {
+  if (!isBrowser) return;
+  localStorage.removeItem(LS_PHANTOMBUSTER_CONFIG);
 }
 
 // ─────────────────────────────────────────────────────────────

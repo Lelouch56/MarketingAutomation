@@ -1,6 +1,6 @@
 """
 Unified LLM provider module.
-Supports OpenAI, Google Gemini, and Anthropic Claude.
+Supports OpenAI, Google Gemini, Anthropic Claude, xAI Grok, and Groq (Llama/free tier).
 API keys are passed per-request (never stored server-side).
 """
 
@@ -18,7 +18,7 @@ class LLMError(Exception):
 
 @dataclass
 class LLMConfig:
-    provider: str   # "openai" | "gemini" | "anthropic" | "grok"
+    provider: str   # "openai" | "gemini" | "anthropic" | "grok" | "groq"
     api_key: str
     model: str
 
@@ -159,6 +159,30 @@ def _call_grok(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
     except Exception as e:
         raise LLMError(f"Grok error: {e}") from e
 
+
+def _call_groq(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
+    try:
+        from openai import OpenAI
+        # Groq uses an OpenAI-compatible API — free tier with Llama models
+        client = OpenAI(api_key=config.api_key, base_url="https://api.groq.com/openai/v1")
+
+        def _do():
+            response = client.chat.completions.create(
+                model=config.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=4096,
+                temperature=0.7,
+            )
+            return response.choices[0].message.content or ""
+
+        return _call_with_retry(_do)
+    except Exception as e:
+        raise LLMError(f"Groq error: {e}") from e
+
+
 def call_llm(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
     """
     Route to the correct LLM provider based on config.provider.
@@ -174,8 +198,10 @@ def call_llm(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
         return _call_anthropic(config, system_prompt, user_prompt)
     elif provider == "grok":
         return _call_grok(config, system_prompt, user_prompt)
+    elif provider == "groq":
+        return _call_groq(config, system_prompt, user_prompt)
     else:
-        raise LLMError(f"Unknown provider: {config.provider}. Use 'openai', 'gemini', 'anthropic', or 'grok'.")
+        raise LLMError(f"Unknown provider: {config.provider}. Use 'openai', 'gemini', 'anthropic', 'grok', or 'groq'.")
 
 
 def call_llm_json(config: LLMConfig, system_prompt: str, user_prompt: str) -> dict:

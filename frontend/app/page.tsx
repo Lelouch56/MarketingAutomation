@@ -198,29 +198,14 @@ export default function Dashboard() {
       )}
 
       <Grid container spacing={3}>
-        {/* Agent 1 */}
-        <Grid item xs={12} sm={6}>
-          <AgentCard
-            agentId="agent1"
-            name="Content Writer & SEO"
-            description="AI-powered blog generation with SEO optimization, internal linking, quality verification, and LinkedIn post creation."
-            status={a1Status}
-            stepsCount={7}
-            onRun={handleRunAgent1}
-            isRunning={a1Running || a1Status?.status === 'running'}
-            lastRun={a1Status?.completed_at}
-            implemented={true}
-          />
-        </Grid>
-
         {/* Agent 2 */}
         <Grid item xs={12} sm={6}>
           <AgentCard
             agentId="agent2"
             name="Lead Qualification"
-            description="Deduplicates and categorizes leads, scrapes company websites, AI-scores for travel industry fit, and auto-enrolls into Klenty campaigns."
+            description="Deduplicates and categorizes leads, scrapes company websites, AI-scores for travel industry fit, seeds blog topics to Agent 1, and auto-enrolls into Klenty/Outplay campaigns."
             status={a2Status}
-            stepsCount={7}
+            stepsCount={8}
             onRun={handleRunAgent2}
             isRunning={a2Running || a2Status?.status === 'running'}
             lastRun={a2Status?.completed_at}
@@ -233,9 +218,9 @@ export default function Dashboard() {
           <AgentCard
             agentId="agent3"
             name="LinkedIn Outbound"
-            description="AI-generates B2B prospect profiles for travel industry, filters decision-makers, and auto-enrolls approved targets into Klenty email sequences."
+            description="Reads Agent 2 hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved targets."
             status={a3Status}
-            stepsCount={7}
+            stepsCount={8}
             onRun={handleRunAgent3}
             isRunning={a3Running || a3Status?.status === 'running'}
             lastRun={a3Status?.completed_at}
@@ -254,6 +239,21 @@ export default function Dashboard() {
             onRun={handleRunAgent4}
             isRunning={a4Running || a4Status?.status === 'running'}
             lastRun={a4Status?.completed_at}
+            implemented={true}
+          />
+        </Grid>
+
+        {/* Agent 1 — runs after Agent 2 seeds topics */}
+        <Grid item xs={12} sm={6}>
+          <AgentCard
+            agentId="agent1"
+            name="Content Writer & SEO"
+            description="Picks pending topics (seeded by Agent 2 or added manually), generates SEO-optimized blogs, runs quality checks, creates LinkedIn posts, and publishes to WordPress."
+            status={a1Status}
+            stepsCount={8}
+            onRun={handleRunAgent1}
+            isRunning={a1Running || a1Status?.status === 'running'}
+            lastRun={a1Status?.completed_at}
             implemented={true}
           />
         </Grid>

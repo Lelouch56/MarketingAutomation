@@ -1,1 +1,744 @@
-[]
+[
+  {
+    "id": "48170d1f-9e94-4878-87eb-4a3c85dabcbc",
+    "generated_at": "2026-03-09T12:32:11.499849+00:00",
+    "status": "complete",
+    "aggregated": {
+      "total_leads": 8,
+      "hot_leads": 6,
+      "warm_leads": 0,
+      "cold_leads": 2,
+      "fit_clients": 0,
+      "avg_lead_score": 37.5,
+      "klenty_enrolled_leads": 0,
+      "total_topics": 8,
+      "published_blogs": 4,
+      "avg_blog_quality": 61.5,
+      "total_outreach_targets": 0,
+      "outreach_approved": 0,
+      "outreach_enrolled": 0,
+      "outreach_pending": 0
+    },
+    "analysis": {
+      "funnel_summary": {
+        "total_leads": 8,
+        "hot_leads": 6,
+        "warm_leads": 0,
+        "cold_leads": 2,
+        "fit_clients": 0,
+        "outreach_targets": 0,
+        "klenty_enrolled": 0,
+        "blogs_published": 4,
+        "conversion_rate_pct": 0.0
+      },
+      "top_performing_content": [
+        {
+          "title": "Hotel Content Standard",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms"
+        },
+        {
+          "title": "OTA API Integration",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/ota-api-integration-best-practices"
+        },
+        {
+          "title": "Hotel Tech 2026",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/hotel-technology-trends-2026"
+        }
+      ],
+      "campaign_distribution": {
+        "notify_rupesh": 6,
+        "C": 2,
+        "not_fit": 0
+      },
+      "key_insights": [
+        "The majority of leads (6 out of 8) are classified as hot, indicating a strong potential for conversion.",
+        "There are no warm leads, suggesting that the current marketing strategy may not be effective in nurturing leads.",
+        "The average lead score is 37.5, which is relatively low, indicating that the leads may not be highly qualified."
+      ],
+      "recommendations": [
+        "Develop a lead nurturing strategy to convert cold and hot leads into warm leads and eventually into fit clients.",
+        "Create more targeted content to improve the average lead score and increase the number of fit clients.",
+        "Consider optimizing the current marketing campaigns, such as 'notify_rupesh' and 'C', to improve their effectiveness and reach a wider audience."
+      ],
+      "health_score": 60,
+      "health_rating": "Needs Attention"
+    },
+    "funnel_summary": {
+      "total_leads": 8,
+      "hot_leads": 6,
+      "warm_leads": 0,
+      "cold_leads": 2,
+      "fit_clients": 0,
+      "outreach_targets": 0,
+      "klenty_enrolled": 0,
+      "blogs_published": 4,
+      "conversion_rate_pct": 0.0
+    },
+    "campaign_distribution": {
+      "notify_rupesh": 6,
+      "C": 2,
+      "not_fit": 0
+    },
+    "key_insights": [
+      "The majority of leads (6 out of 8) are classified as hot, indicating a strong potential for conversion.",
+      "There are no warm leads, suggesting that the current marketing strategy may not be effective in nurturing leads.",
+      "The average lead score is 37.5, which is relatively low, indicating that the leads may not be highly qualified."
+    ],
+    "recommendations": [
+      "Develop a lead nurturing strategy to convert cold and hot leads into warm leads and eventually into fit clients.",
+      "Create more targeted content to improve the average lead score and increase the number of fit clients.",
+      "Consider optimizing the current marketing campaigns, such as 'notify_rupesh' and 'C', to improve their effectiveness and reach a wider audience."
+    ],
+    "health_score": 60,
+    "health_rating": "Needs Attention",
+    "top_content": [
+      {
+        "title": "Hotel Content Standard",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms"
+      },
+      {
+        "title": "OTA API Integration",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/ota-api-integration-best-practices"
+      },
+      {
+        "title": "Hotel Tech 2026",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/hotel-technology-trends-2026"
+      }
+    ],
+    "executive_summary": "The marketing performance for the reported period was marked by a health score of 60, indicating a need for attention. The overall performance was characterized by a total of 8 leads, with 6 being classified as hot, suggesting a strong potential for conversion. However, the conversion rate was 0%, indicating a lack of effectiveness in converting leads into fit clients. The campaign distribution showed that the 'notify_rupesh' campaign was the most prominent, with 6 leads. The top-performing content included the 'Hotel Content Standard', 'OTA API Integration', and 'Hotel Tech 2026' blogs, which all scored 82 in terms of quality. The key insights from the analysis highlighted the need for a lead nurturing strategy to convert cold and hot leads into warm leads. The average lead score was relatively low, at 37.5, indicating that the leads may not be highly qualified. The areas of concern included the lack of warm leads and the low conversion rate, which suggests that the current marketing strategy may not be effective in nurturing leads. The top recommendations included developing a lead nurturing strategy, creating more targeted content, and optimizing the current marketing campaigns. The 'notify_rupesh' and 'C' campaigns were identified as areas for improvement. The health rating of 'Needs Attention' underscored the importance of addressing these areas of concern. By implementing these recommendations, the marketing team can improve the overall performance and increase the number of fit clients. The low conversion rate and lack of warm leads were significant concerns that need to be addressed. The marketing team should prioritize developing a lead nurturing strategy and creating more targeted content to improve the average lead score and increase the number of fit clients.",
+    "one_liner": "This period generated 8 leads with a 0% conversion rate, driven by strong content output of 4 published blogs, with the 'notify_rupesh' campaign being the most prominent, and highlighted a need for a lead nurturing strategy to improve overall campaign health.",
+    "visualizations": {
+      "lead_funnel": {
+        "type": "bar",
+        "labels": [
+          "Total Leads",
+          "Hot",
+          "Fit Clients",
+          "Klenty Enrolled"
+        ],
+        "data": [
+          8,
+          6,
+          0,
+          0
+        ]
+      },
+      "campaign_distribution": {
+        "type": "pie",
+        "labels": [
+          "Campaign A (Fit)",
+          "Campaign B (Warm)",
+          "Campaign C (Cold)",
+          "Not Fit"
+        ],
+        "data": [
+          0,
+          0,
+          2,
+          6
+        ]
+      },
+      "lead_categories": {
+        "type": "donut",
+        "labels": [
+          "Hot",
+          "Warm",
+          "Cold"
+        ],
+        "data": [
+          6,
+          0,
+          2
+        ]
+      },
+      "content_quality": {
+        "type": "bar",
+        "labels": [
+          "Hotel Content Standard",
+          "OTA API Integration",
+          "Hotel Tech 2026",
+          ""
+        ],
+        "data": [
+          82,
+          82,
+          82,
+          0
+        ]
+      }
+    },
+    "power_bi_status": "queued_no_credentials"
+  },
+  {
+    "id": "91bcca97-9b65-4c12-8cef-2ab8538ca436",
+    "generated_at": "2026-03-10T06:46:27.530903+00:00",
+    "status": "complete",
+    "aggregated": {
+      "total_leads": 8,
+      "hot_leads": 6,
+      "warm_leads": 0,
+      "cold_leads": 2,
+      "fit_clients": 0,
+      "avg_lead_score": 37.5,
+      "klenty_enrolled_leads": 0,
+      "total_topics": 8,
+      "published_blogs": 5,
+      "avg_blog_quality": 65.6,
+      "total_outreach_targets": 8,
+      "outreach_approved": 0,
+      "outreach_enrolled": 0,
+      "outreach_pending": 8
+    },
+    "analysis": {
+      "funnel_summary": {
+        "total_leads": 8,
+        "hot_leads": 6,
+        "warm_leads": 0,
+        "cold_leads": 2,
+        "fit_clients": 0,
+        "outreach_targets": 8,
+        "klenty_enrolled": 0,
+        "blogs_published": 5,
+        "conversion_rate_pct": 0.0
+      },
+      "top_performing_content": [
+        {
+          "title": "AI in Travel",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/ai-and-machine-learning-in-travel-data-management"
+        },
+        {
+          "title": "Hotel Content Standard",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms"
+        },
+        {
+          "title": "OTA API Integration",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/ota-api-integration-best-practices"
+        },
+        {
+          "title": "Hotel Tech 2026",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/hotel-technology-trends-2026"
+        }
+      ],
+      "campaign_distribution": {
+        "notify_rupesh": 6,
+        "C": 2,
+        "not_fit": 0
+      },
+      "key_insights": [
+        "The majority of leads (75%) are classified as hot, indicating a strong potential for conversion.",
+        "The average lead score is 37.5, suggesting that the leads are of moderate quality.",
+        "The average blog quality score is 65.6, indicating that the content is of good quality, but there is room for improvement."
+      ],
+      "recommendations": [
+        "Focus on nurturing the hot leads to increase the conversion rate.",
+        "Improve the quality of leads by refining the targeting criteria and lead scoring model.",
+        "Optimize the outreach strategy to increase the number of approved and enrolled leads."
+      ],
+      "health_score": 60,
+      "health_rating": "Needs Attention"
+    },
+    "funnel_summary": {
+      "total_leads": 8,
+      "hot_leads": 6,
+      "warm_leads": 0,
+      "cold_leads": 2,
+      "fit_clients": 0,
+      "outreach_targets": 8,
+      "klenty_enrolled": 0,
+      "blogs_published": 5,
+      "conversion_rate_pct": 0.0
+    },
+    "campaign_distribution": {
+      "notify_rupesh": 6,
+      "C": 2,
+      "not_fit": 0
+    },
+    "key_insights": [
+      "The majority of leads (75%) are classified as hot, indicating a strong potential for conversion.",
+      "The average lead score is 37.5, suggesting that the leads are of moderate quality.",
+      "The average blog quality score is 65.6, indicating that the content is of good quality, but there is room for improvement."
+    ],
+    "recommendations": [
+      "Focus on nurturing the hot leads to increase the conversion rate.",
+      "Improve the quality of leads by refining the targeting criteria and lead scoring model.",
+      "Optimize the outreach strategy to increase the number of approved and enrolled leads."
+    ],
+    "health_score": 60,
+    "health_rating": "Needs Attention",
+    "top_content": [
+      {
+        "title": "AI in Travel",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/ai-and-machine-learning-in-travel-data-management"
+      },
+      {
+        "title": "Hotel Content Standard",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms"
+      },
+      {
+        "title": "OTA API Integration",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/ota-api-integration-best-practices"
+      },
+      {
+        "title": "Hotel Tech 2026",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/hotel-technology-trends-2026"
+      }
+    ],
+    "executive_summary": "This reporting period saw 8 leads processed with 0 qualifying as fit clients (0.0% conversion rate). The content pipeline published 5 blogs. Overall platform health: Needs Attention.",
+    "one_liner": "Processed 8 leads with 0 fit clients.",
+    "visualizations": {
+      "lead_funnel": {
+        "type": "bar",
+        "labels": [
+          "Total Leads",
+          "Hot",
+          "Fit Clients",
+          "Klenty Enrolled"
+        ],
+        "data": [
+          8,
+          6,
+          0,
+          0
+        ]
+      },
+      "campaign_distribution": {
+        "type": "pie",
+        "labels": [
+          "Campaign A (Fit)",
+          "Campaign B (Warm)",
+          "Campaign C (Cold)",
+          "Not Fit"
+        ],
+        "data": [
+          0,
+          0,
+          2,
+          6
+        ]
+      },
+      "lead_categories": {
+        "type": "donut",
+        "labels": [
+          "Hot",
+          "Warm",
+          "Cold"
+        ],
+        "data": [
+          6,
+          0,
+          2
+        ]
+      },
+      "content_quality": {
+        "type": "bar",
+        "labels": [
+          "AI in Travel",
+          "Hotel Content Standard",
+          "OTA API Integration",
+          "Hotel Tech 2026",
+          ""
+        ],
+        "data": [
+          82,
+          82,
+          82,
+          82,
+          0
+        ]
+      }
+    },
+    "power_bi_status": "queued_no_credentials"
+  },
+  {
+    "id": "a7a5a598-8366-4e5d-9d5a-a132bc465dd3",
+    "generated_at": "2026-03-11T12:51:14.868031+00:00",
+    "status": "complete",
+    "aggregated": {
+      "total_leads": 100,
+      "hot_leads": 0,
+      "warm_leads": 53,
+      "cold_leads": 47,
+      "fit_clients": 0,
+      "avg_lead_score": 0.0,
+      "klenty_enrolled_leads": 0,
+      "total_topics": 8,
+      "published_blogs": 5,
+      "avg_blog_quality": 65.6,
+      "total_outreach_targets": 8,
+      "outreach_approved": 0,
+      "outreach_enrolled": 0,
+      "outreach_pending": 8
+    },
+    "analysis": {
+      "funnel_summary": {
+        "total_leads": 100,
+        "hot_leads": 0,
+        "warm_leads": 53,
+        "cold_leads": 47,
+        "fit_clients": 0,
+        "outreach_targets": 8,
+        "klenty_enrolled": 0,
+        "blogs_published": 5,
+        "conversion_rate_pct": 0.0
+      },
+      "top_performing_content": [
+        {
+          "title": "AI in Travel",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/ai-and-machine-learning-in-travel-data-management"
+        },
+        {
+          "title": "Hotel Content Standard",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms"
+        },
+        {
+          "title": "OTA API Integration",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/ota-api-integration-best-practices"
+        },
+        {
+          "title": "Hotel Tech 2026",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/hotel-technology-trends-2026"
+        }
+      ],
+      "campaign_distribution": {
+        "campaign_c": 47,
+        "campaign_b": 53,
+        "not_fit": 0
+      },
+      "key_insights": [
+        "The current conversion rate is 0%, indicating that no leads have been converted to fit clients or enrolled in Klenty.",
+        "The majority of leads (53%) are categorized as warm, while 47% are cold, suggesting that the lead campaigns are generating a significant number of potential clients.",
+        "The average blog quality score is 65.6, with the top-performing blogs having a quality score of 82, indicating that the content is of high quality but may not be resonating with the target audience."
+      ],
+      "recommendations": [
+        "Optimize the lead campaigns to improve conversion rates, potentially by targeting specific demographics or adjusting the messaging.",
+        "Develop a strategy to nurture the warm leads and convert them into fit clients, such as through targeted outreach or personalized content.",
+        "Analyze the performance of the top-performing blogs and use the insights to improve the quality and relevance of future content."
+      ],
+      "health_score": 60,
+      "health_rating": "Needs Attention"
+    },
+    "funnel_summary": {
+      "total_leads": 100,
+      "hot_leads": 0,
+      "warm_leads": 53,
+      "cold_leads": 47,
+      "fit_clients": 0,
+      "outreach_targets": 8,
+      "klenty_enrolled": 0,
+      "blogs_published": 5,
+      "conversion_rate_pct": 0.0
+    },
+    "campaign_distribution": {
+      "campaign_c": 47,
+      "campaign_b": 53,
+      "not_fit": 0
+    },
+    "key_insights": [
+      "The current conversion rate is 0%, indicating that no leads have been converted to fit clients or enrolled in Klenty.",
+      "The majority of leads (53%) are categorized as warm, while 47% are cold, suggesting that the lead campaigns are generating a significant number of potential clients.",
+      "The average blog quality score is 65.6, with the top-performing blogs having a quality score of 82, indicating that the content is of high quality but may not be resonating with the target audience."
+    ],
+    "recommendations": [
+      "Optimize the lead campaigns to improve conversion rates, potentially by targeting specific demographics or adjusting the messaging.",
+      "Develop a strategy to nurture the warm leads and convert them into fit clients, such as through targeted outreach or personalized content.",
+      "Analyze the performance of the top-performing blogs and use the insights to improve the quality and relevance of future content."
+    ],
+    "health_score": 60,
+    "health_rating": "Needs Attention",
+    "top_content": [
+      {
+        "title": "AI in Travel",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/ai-and-machine-learning-in-travel-data-management"
+      },
+      {
+        "title": "Hotel Content Standard",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms"
+      },
+      {
+        "title": "OTA API Integration",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/ota-api-integration-best-practices"
+      },
+      {
+        "title": "Hotel Tech 2026",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/hotel-technology-trends-2026"
+      }
+    ],
+    "executive_summary": "This reporting period saw 100 leads processed with 0 qualifying as fit clients (0.0% conversion rate). The content pipeline published 5 blogs. Overall platform health: Needs Attention.",
+    "one_liner": "Processed 100 leads with 0 fit clients.",
+    "visualizations": {
+      "lead_funnel": {
+        "type": "bar",
+        "labels": [
+          "Total Leads",
+          "Hot",
+          "Fit Clients",
+          "Klenty Enrolled"
+        ],
+        "data": [
+          100,
+          0,
+          0,
+          0
+        ]
+      },
+      "campaign_distribution": {
+        "type": "pie",
+        "labels": [
+          "Campaign A (Fit)",
+          "Campaign B (Warm)",
+          "Campaign C (Cold)",
+          "Not Fit"
+        ],
+        "data": [
+          0,
+          53,
+          47,
+          0
+        ]
+      },
+      "lead_categories": {
+        "type": "donut",
+        "labels": [
+          "Hot",
+          "Warm",
+          "Cold"
+        ],
+        "data": [
+          0,
+          53,
+          47
+        ]
+      },
+      "content_quality": {
+        "type": "bar",
+        "labels": [
+          "AI in Travel",
+          "Hotel Content Standard",
+          "OTA API Integration",
+          "Hotel Tech 2026",
+          ""
+        ],
+        "data": [
+          82,
+          82,
+          82,
+          82,
+          0
+        ]
+      }
+    },
+    "power_bi_status": "queued_no_credentials"
+  },
+  {
+    "id": "9fc3870d-32e1-498d-8ecb-65a0cd14e219",
+    "generated_at": "2026-03-12T09:32:04.212753+00:00",
+    "status": "complete",
+    "aggregated": {
+      "total_leads": 0,
+      "hot_leads": 0,
+      "warm_leads": 0,
+      "cold_leads": 0,
+      "fit_clients": 0,
+      "avg_lead_score": 0,
+      "klenty_enrolled_leads": 0,
+      "total_topics": 22,
+      "published_blogs": 5,
+      "avg_blog_quality": 65.6,
+      "total_outreach_targets": 16,
+      "outreach_approved": 0,
+      "outreach_enrolled": 0,
+      "outreach_pending": 16
+    },
+    "analysis": {
+      "funnel_summary": {
+        "total_leads": 0,
+        "hot_leads": 0,
+        "warm_leads": 0,
+        "cold_leads": 0,
+        "fit_clients": 0,
+        "outreach_targets": 16,
+        "klenty_enrolled": 0,
+        "blogs_published": 5,
+        "conversion_rate_pct": 0.0
+      },
+      "top_performing_content": [
+        {
+          "title": "AI in Travel",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/ai-and-machine-learning-in-travel-data-management"
+        },
+        {
+          "title": "Hotel Content Standard",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms"
+        },
+        {
+          "title": "OTA API Integration",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/ota-api-integration-best-practices"
+        },
+        {
+          "title": "Hotel Tech 2026",
+          "quality_score": 82,
+          "url": "https://vervotech.com/blog/hotel-technology-trends-2026"
+        }
+      ],
+      "campaign_distribution": {
+        "campaign_a": 0,
+        "campaign_b": 0,
+        "campaign_c": 0,
+        "not_fit": 0
+      },
+      "key_insights": [
+        "Insight 1: The current lead funnel is empty, with no leads generated across hot, warm, or cold categories.",
+        "Insight 2: All outreach targets are pending, indicating a need for follow-up or re-engagement efforts.",
+        "Insight 3: The average blog quality score is 65.6, but top-performing content has a quality score of 82, suggesting room for improvement in content creation."
+      ],
+      "recommendations": [
+        "Recommendation 1: Focus on generating leads through targeted marketing campaigns and outreach efforts to fill the lead funnel.",
+        "Recommendation 2: Prioritize follow-up and re-engagement with outreach targets to increase the chances of conversion.",
+        "Recommendation 3: Develop a content strategy that focuses on creating high-quality, engaging content to improve the overall average blog quality score."
+      ],
+      "health_score": 40,
+      "health_rating": "Needs Attention"
+    },
+    "funnel_summary": {
+      "total_leads": 0,
+      "hot_leads": 0,
+      "warm_leads": 0,
+      "cold_leads": 0,
+      "fit_clients": 0,
+      "outreach_targets": 16,
+      "klenty_enrolled": 0,
+      "blogs_published": 5,
+      "conversion_rate_pct": 0.0
+    },
+    "campaign_distribution": {
+      "campaign_a": 0,
+      "campaign_b": 0,
+      "campaign_c": 0,
+      "not_fit": 0
+    },
+    "key_insights": [
+      "Insight 1: The current lead funnel is empty, with no leads generated across hot, warm, or cold categories.",
+      "Insight 2: All outreach targets are pending, indicating a need for follow-up or re-engagement efforts.",
+      "Insight 3: The average blog quality score is 65.6, but top-performing content has a quality score of 82, suggesting room for improvement in content creation."
+    ],
+    "recommendations": [
+      "Recommendation 1: Focus on generating leads through targeted marketing campaigns and outreach efforts to fill the lead funnel.",
+      "Recommendation 2: Prioritize follow-up and re-engagement with outreach targets to increase the chances of conversion.",
+      "Recommendation 3: Develop a content strategy that focuses on creating high-quality, engaging content to improve the overall average blog quality score."
+    ],
+    "health_score": 40,
+    "health_rating": "Needs Attention",
+    "top_content": [
+      {
+        "title": "AI in Travel",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/ai-and-machine-learning-in-travel-data-management"
+      },
+      {
+        "title": "Hotel Content Standard",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/hotel-content-standardization-for-global-booking-platforms"
+      },
+      {
+        "title": "OTA API Integration",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/ota-api-integration-best-practices"
+      },
+      {
+        "title": "Hotel Tech 2026",
+        "quality_score": 82,
+        "url": "https://vervotech.com/blog/hotel-technology-trends-2026"
+      }
+    ],
+    "executive_summary": "The marketing performance for the period was characterized by a lack of lead generation, with the lead funnel remaining empty across all categories. The outreach targets, totaling 16, were pending and required follow-up efforts to re-engage and potentially convert them into leads. Despite this, the team successfully published 5 blogs, with top-performing content such as 'AI in Travel' and 'Hotel Content Standard' achieving a quality score of 82. However, the overall average blog quality score was 65.6, indicating room for improvement. The campaign distribution showed no leads generated from any campaign, and the key insights highlighted the need for targeted marketing campaigns and follow-up efforts. The health score of 40 and health rating of 'Needs Attention' further emphasized the areas of concern. The top recommendations included focusing on generating leads, prioritizing follow-up with outreach targets, and developing a content strategy to improve the average blog quality score. By implementing these recommendations, the team can work towards improving the overall marketing performance and lead generation.",
+    "one_liner": "This period was marked by an empty lead funnel with 16 pending outreach targets, driven by a lack of targeted marketing campaigns and follow-up efforts, despite publishing 5 blogs with top-performing content achieving a quality score of 82.",
+    "visualizations": {
+      "lead_funnel": {
+        "type": "bar",
+        "labels": [
+          "Total Leads",
+          "Hot",
+          "Fit Clients",
+          "Klenty Enrolled"
+        ],
+        "data": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "campaign_distribution": {
+        "type": "pie",
+        "labels": [
+          "Campaign A (Fit)",
+          "Campaign B (Warm)",
+          "Campaign C (Cold)",
+          "Not Fit"
+        ],
+        "data": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "lead_categories": {
+        "type": "donut",
+        "labels": [
+          "Hot",
+          "Warm",
+          "Cold"
+        ],
+        "data": [
+          0,
+          0,
+          0
+        ]
+      },
+      "content_quality": {
+        "type": "bar",
+        "labels": [
+          "AI in Travel",
+          "Hotel Content Standard",
+          "OTA API Integration",
+          "Hotel Tech 2026",
+          ""
+        ],
+        "data": [
+          82,
+          82,
+          82,
+          82,
+          0
+        ]
+      }
+    },
+    "power_bi_status": "queued_no_credentials"
+  }
+]

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { getLLMConfig, getWordPressConfig, getLinkedInConfig, getKlentyConfig, getOutplayConfig } from '../lib/storage';
+import { getLLMConfig, getWordPressConfig, getLinkedInConfig, getKlentyConfig, getOutplayConfig, getApolloConfig, getSalesNavigatorConfig, getHubSpotConfig, getPhantomBusterConfig } from '../lib/storage';
 import {
   AgentRunStatus,
   TopicRecord,
@@ -78,6 +78,45 @@ function buildRunRequest() {
     };
   }
 
+  // Attach Apollo config if available
+  const apolloConfig = getApolloConfig();
+  if (apolloConfig?.apiKey) {
+    body.apollo = {
+      api_key: apolloConfig.apiKey,
+      per_page: apolloConfig.perPage || 10,
+    };
+  }
+
+  // Attach Sales Navigator config if available (primary for Agent 3 prospect search)
+  const salesNavConfig = getSalesNavigatorConfig();
+  if (salesNavConfig?.accessToken) {
+    body.sales_navigator = {
+      access_token: salesNavConfig.accessToken,
+      count: salesNavConfig.count || 10,
+    };
+  }
+
+  // Attach HubSpot config if available (additional lead source for Agent 2)
+  const hubspotConfig = getHubSpotConfig();
+  if (hubspotConfig?.accessToken) {
+    body.hubspot = {
+      access_token: hubspotConfig.accessToken,
+      max_contacts: hubspotConfig.maxContacts ?? 100,
+    };
+  }
+
+  // Attach PhantomBuster config if available (LinkedIn Search + Connection Sender for Agent 3)
+  const pbConfig = getPhantomBusterConfig();
+  if (pbConfig?.apiKey) {
+    body.phantombuster = {
+      api_key: pbConfig.apiKey,
+      search_phantom_id: pbConfig.searchPhantomId,
+      connection_phantom_id: pbConfig.connectionPhantomId,
+      session_cookie: pbConfig.sessionCookie,
+      connections_per_launch: pbConfig.connectionsPerLaunch ?? 10,
+    };
+  }
+
   return body;
 }
 
@@ -131,6 +170,16 @@ export const agent2Api = {
 
   addLead: (lead: Partial<LeadRecord>): Promise<LeadRecord> =>
     http.post('/agents/agent2/leads', lead).then((r) => r.data),
+
+  downloadLeads: (campaign?: string) => {
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const params = campaign && campaign !== 'all' ? `?campaign=${campaign}` : '';
+    const suffix = campaign && campaign !== 'all' ? `-campaign-${campaign}` : '';
+    const a = document.createElement('a');
+    a.href = `${BASE_URL}/agents/agent2/leads/download${params}`;
+    a.download = `leads-analysis${suffix}.csv`;
+    a.click();
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -211,6 +260,33 @@ export const integrationsApi = {
     sequence_name_c?: string;
   }): Promise<{ success: boolean; message: string; sequences_found?: number }> =>
     http.post('/integrations/test/outplay', config).then((r) => r.data),
+
+  testApollo: (config: {
+    api_key: string;
+    per_page?: number;
+  }): Promise<{ success: boolean; message: string }> =>
+    http.post('/integrations/test/apollo', config).then((r) => r.data),
+
+  testSalesNavigator: (config: {
+    access_token: string;
+    count?: number;
+  }): Promise<{ success: boolean; message: string }> =>
+    http.post('/integrations/test/sales-navigator', config).then((r) => r.data),
+
+  testHubSpot: (config: {
+    access_token: string;
+    max_contacts?: number;
+  }): Promise<{ success: boolean; message: string }> =>
+    http.post('/integrations/test/hubspot', config).then((r) => r.data),
+
+  testPhantomBuster: (config: {
+    api_key: string;
+    search_phantom_id: string;
+    connection_phantom_id: string;
+    session_cookie: string;
+    connections_per_launch?: number;
+  }): Promise<{ status: string; email?: string; message?: string }> =>
+    http.post('/integrations/test/phantombuster', config).then((r) => r.data),
 };
 
 // ─────────────────────────────────────────────────────────────

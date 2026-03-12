@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────
 
 export interface LLMConfig {
-  provider: 'openai' | 'gemini' | 'anthropic' | 'grok';
+  provider: 'openai' | 'gemini' | 'anthropic' | 'grok' | 'groq';
   apiKey: string;
   model: string;
 }
@@ -35,11 +35,35 @@ export interface OutplayConfig {
   sequenceNameC: string;
 }
 
+export interface ApolloConfig {
+  apiKey: string;
+  perPage: number;
+}
+
+export interface SalesNavigatorConfig {
+  accessToken: string;
+  count: number;
+}
+
+export interface HubSpotConfig {
+  accessToken: string;
+  maxContacts: number;
+}
+
+export interface PhantomBusterConfig {
+  apiKey: string;
+  searchPhantomId: string;       // "LinkedIn Search Export" phantom Agent ID
+  connectionPhantomId: string;   // "LinkedIn Connection Sender" phantom Agent ID
+  sessionCookie: string;         // LinkedIn li_at cookie
+  connectionsPerLaunch: number;  // cap per run (default 10)
+}
+
 export const MODEL_OPTIONS: Record<LLMConfig['provider'], string[]> = {
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
   gemini: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-pro-exp-02-05'],
   anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307', 'claude-3-opus-20240229'],
   grok: ['grok-2', 'grok-2-latest'],
+  groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'meta-llama/llama-4-scout-17b-16e-instruct'],
 };
 
 export const PROVIDER_LABELS: Record<LLMConfig['provider'], string> = {
@@ -47,13 +71,14 @@ export const PROVIDER_LABELS: Record<LLMConfig['provider'], string> = {
   gemini: 'Google Gemini',
   anthropic: 'Anthropic Claude',
   grok: 'xAI (Grok)',
+  groq: 'Groq (Free Llama)',
 };
 
 // ─────────────────────────────────────────────────────────────
 // Agent Run State
 // ─────────────────────────────────────────────────────────────
 
-export type StepStatusType = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+export type StepStatusType = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'warning';
 export type AgentStatusType = 'idle' | 'running' | 'completed' | 'failed';
 
 export interface StepStatus {
@@ -106,6 +131,12 @@ export interface TopicRecord {
   quality_score?: number;
   created_at?: string;
   updated_at?: string;
+  // Agent 2 web-scrape seeding fields
+  source?: string;              // "web_scrape" = seeded by Agent 2 | undefined = manually added
+  source_company?: string;      // company website URL that generated this topic
+  source_lead_email?: string;   // lead email that was scraped
+  llm_relevance?: string;       // LLM explanation of why this topic suits Vervotech
+  relevance_score?: number;     // 0–100 relevance confidence score
 }
 
 export interface LeadRecord {
@@ -115,6 +146,7 @@ export interface LeadRecord {
   name?: string;
   company?: string;
   category?: 'Hot' | 'Warm' | 'Cold';
+  analysis_status?: 'completed' | 'skipped' | 'failed';
   campaign?: string;
   campaign_label?: string;
   score?: number;
@@ -124,6 +156,12 @@ export interface LeadRecord {
   signals?: string[];
   concerns?: string[];
   klenty_enrolled?: boolean;
+  klenty_enrolled_run_id?: string;
+  klenty_enrolled_at?: string;
+  outplay_enrolled?: boolean;
+  outplay_enrolled_run_id?: string;
+  outplay_enrolled_at?: string;
+  processed_run_id?: string;
   processed_at?: string;
   created_at?: string;
 }
@@ -142,6 +180,10 @@ export interface OutreachTargetRecord {
   region?: string;
   employees?: string;
   relevance_reason?: string;
+  outreach_score?: number | null;       // AI outreach fit score 0-100
+  outreach_reason?: string;             // 2-sentence outreach rationale
+  connection_message?: string;          // personalized LinkedIn note ≤200 chars
+  is_dummy?: boolean;                   // true = AI-generated demo data (no real source), false = real profile
   status: 'raw' | 'filtered' | 'pending_approval' | 'approved';
   klenty_enrolled?: boolean;
   linkedin_status?: string;
@@ -179,9 +221,11 @@ export interface BlogRecord {
   title?: string;
   slug?: string;
   meta_description?: string;
+  content_html?: string;
   quality_score?: number;
   quality_verdict?: string;
   linkedin_post?: string;
+  linkedin_hashtags?: string[];
   blog_url: string;
   created_at?: string;
 }
@@ -209,3 +253,7 @@ export const LS_WP_CONFIG = 'ma_wp_config';
 export const LS_LINKEDIN_CONFIG = 'ma_linkedin_config';
 export const LS_KLENTY_CONFIG = 'ma_klenty_config';
 export const LS_OUTPLAY_CONFIG = 'ma_outplay_config';
+export const LS_APOLLO_CONFIG = 'ma_apollo_config';
+export const LS_SALES_NAVIGATOR_CONFIG = 'ma_sales_navigator_config';
+export const LS_HUBSPOT_CONFIG = 'ma_hubspot_config';
+export const LS_PHANTOMBUSTER_CONFIG = 'ma_phantombuster_config';

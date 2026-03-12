@@ -46,12 +46,39 @@ class OutplayConfigModel(BaseModel):
     sequence_name_c: str = "Cold Lead Sequence"     # Cold leads
 
 
+class ApolloConfigModel(BaseModel):
+    api_key: str
+    per_page: int = 10
+
+
+class SalesNavigatorConfigModel(BaseModel):
+    access_token: str
+    count: int = 10
+
+
+class HubSpotConfigModel(BaseModel):
+    access_token: str
+    max_contacts: int = 100
+
+
+class PhantomBusterConfigModel(BaseModel):
+    api_key: str
+    search_phantom_id: str              # "LinkedIn Search Export" phantom Agent ID
+    connection_phantom_id: str          # "LinkedIn Connection Sender" phantom Agent ID
+    session_cookie: str                 # LinkedIn li_at cookie (demo/local use only)
+    connections_per_launch: int = 10    # Cap per run to stay within LinkedIn daily limits
+
+
 class RunAgentRequest(BaseModel):
     llm_config: LLMConfigModel
     wordpress: Optional[WordPressConfigModel] = None
     linkedin: Optional[LinkedInConfigModel] = None
     klenty: Optional[KlentyConfigModel] = None
     outplay: Optional[OutplayConfigModel] = None
+    apollo: Optional[ApolloConfigModel] = None
+    sales_navigator: Optional[SalesNavigatorConfigModel] = None
+    hubspot: Optional[HubSpotConfigModel] = None
+    phantombuster: Optional[PhantomBusterConfigModel] = None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -61,7 +88,7 @@ class RunAgentRequest(BaseModel):
 class StepStatus(BaseModel):
     step_number: int
     name: str
-    status: str                  # "pending" | "running" | "completed" | "failed" | "skipped"
+    status: str                  # "pending" | "running" | "completed" | "failed" | "skipped" | "warning"
     message: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None

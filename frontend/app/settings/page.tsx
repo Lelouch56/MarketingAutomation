@@ -36,17 +36,19 @@ import {
   setKlentyConfig,
   getOutplayConfig,
   setOutplayConfig,
+  getApolloConfig,
+  setApolloConfig,
+  getSalesNavigatorConfig,
+  setSalesNavigatorConfig,
+  getHubSpotConfig,
+  setHubSpotConfig,
+  getPhantomBusterConfig,
+  setPhantomBusterConfig,
 } from '../../lib/storage';
-import { LLMConfig, WordPressConfig, LinkedInConfig, KlentyConfig, OutplayConfig, MODEL_OPTIONS, PROVIDER_LABELS } from '../../types';
+import { LLMConfig, WordPressConfig, LinkedInConfig, KlentyConfig, OutplayConfig, ApolloConfig, SalesNavigatorConfig, HubSpotConfig, PhantomBusterConfig, MODEL_OPTIONS, PROVIDER_LABELS } from '../../types';
 import { integrationsApi } from '../../services/api';
 
 const OTHER_INTEGRATIONS = [
-  {
-    name: 'HubSpot CRM',
-    description: 'Sync qualified leads and campaign assignments to HubSpot.',
-    docs: 'https://developers.hubspot.com/',
-    status: 'Coming Soon',
-  },
   {
     name: 'Zoho CRM',
     description: 'Pull leads from Zoho and merge into the Master Lead Table.',
@@ -66,6 +68,7 @@ const KEY_PATTERNS: Record<string, { pattern: RegExp; example: string }> = {
   gemini: { pattern: /^AIza/, example: 'AIzaSy...' },
   anthropic: { pattern: /^sk-ant-/, example: 'sk-ant-...' },
   grok: { pattern: /^xai-/, example: 'xai-...' },
+  groq: { pattern: /^gsk_/, example: 'gsk_...' },
 };
 
 export default function SettingsPage() {
@@ -130,6 +133,50 @@ export default function SettingsPage() {
   const [outplayTestResult, setOutplayTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [outplayTesting, setOutplayTesting] = useState(false);
 
+  // Apollo state
+  const [apolloConfig, setApolloConfigState] = useState<ApolloConfig>({
+    apiKey: '',
+    perPage: 10,
+  });
+  const [apolloSaved, setApolloSaved] = useState(false);
+  const [apolloShowKey, setApolloShowKey] = useState(false);
+  const [apolloTestResult, setApolloTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [apolloTesting, setApolloTesting] = useState(false);
+
+  // Sales Navigator state
+  const [salesNavConfig, setSalesNavConfigState] = useState<SalesNavigatorConfig>({
+    accessToken: '',
+    count: 10,
+  });
+  const [salesNavSaved, setSalesNavSaved] = useState(false);
+  const [salesNavShowToken, setSalesNavShowToken] = useState(false);
+  const [salesNavTestResult, setSalesNavTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [salesNavTesting, setSalesNavTesting] = useState(false);
+
+  // HubSpot state
+  const [hubspotConfig, setHubSpotConfigState] = useState<HubSpotConfig>({
+    accessToken: '',
+    maxContacts: 100,
+  });
+  const [hubspotSaved, setHubSpotSaved] = useState(false);
+  const [hubspotShowToken, setHubSpotShowToken] = useState(false);
+  const [hubspotTestResult, setHubSpotTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [hubspotTesting, setHubSpotTesting] = useState(false);
+
+  // PhantomBuster state
+  const [pbConfig, setPbConfigState] = useState<PhantomBusterConfig>({
+    apiKey: '',
+    searchPhantomId: '',
+    connectionPhantomId: '',
+    sessionCookie: '',
+    connectionsPerLaunch: 10,
+  });
+  const [pbSaved, setPbSaved] = useState(false);
+  const [pbShowKey, setPbShowKey] = useState(false);
+  const [pbShowCookie, setPbShowCookie] = useState(false);
+  const [pbTestResult, setPbTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [pbTesting, setPbTesting] = useState(false);
+
   useEffect(() => {
     const existing = getLLMConfig();
     if (existing) setConfig(existing);
@@ -141,6 +188,14 @@ export default function SettingsPage() {
     if (existingKlenty) setKlentyConfigState(existingKlenty);
     const existingOutplay = getOutplayConfig();
     if (existingOutplay) setOutplayConfigState(existingOutplay);
+    const existingApollo = getApolloConfig();
+    if (existingApollo) setApolloConfigState(existingApollo);
+    const existingSalesNav = getSalesNavigatorConfig();
+    if (existingSalesNav) setSalesNavConfigState(existingSalesNav);
+    const existingHubSpot = getHubSpotConfig();
+    if (existingHubSpot) setHubSpotConfigState(existingHubSpot);
+    const existingPb = getPhantomBusterConfig();
+    if (existingPb) setPbConfigState(existingPb);
   }, []);
 
   // ── LLM handlers ──────────────────────────────────────────────
@@ -332,6 +387,122 @@ export default function SettingsPage() {
     }
   };
 
+  // ── Apollo handlers ───────────────────────────────────────────
+  const handleApolloSave = () => {
+    setApolloConfig(apolloConfig);
+    setApolloSaved(true);
+    setTimeout(() => setApolloSaved(false), 3000);
+  };
+
+  const handleApolloTest = async () => {
+    if (!apolloConfig.apiKey) {
+      setApolloTestResult({ success: false, message: 'Enter your Apollo.io API key first.' });
+      return;
+    }
+    setApolloTesting(true);
+    setApolloTestResult(null);
+    try {
+      const result = await integrationsApi.testApollo({
+        api_key: apolloConfig.apiKey,
+        per_page: apolloConfig.perPage,
+      });
+      setApolloTestResult(result);
+    } catch {
+      setApolloTestResult({ success: false, message: 'Connection test failed. Check your Apollo API key.' });
+    } finally {
+      setApolloTesting(false);
+    }
+  };
+
+  // ── Sales Navigator handlers ──────────────────────────────────
+  const handleSalesNavSave = () => {
+    setSalesNavigatorConfig(salesNavConfig);
+    setSalesNavSaved(true);
+    setTimeout(() => setSalesNavSaved(false), 3000);
+  };
+
+  const handleSalesNavTest = async () => {
+    if (!salesNavConfig.accessToken) {
+      setSalesNavTestResult({ success: false, message: 'Enter your Sales Navigator access token first.' });
+      return;
+    }
+    setSalesNavTesting(true);
+    setSalesNavTestResult(null);
+    try {
+      const result = await integrationsApi.testSalesNavigator({
+        access_token: salesNavConfig.accessToken,
+        count: salesNavConfig.count,
+      });
+      setSalesNavTestResult(result);
+    } catch {
+      setSalesNavTestResult({ success: false, message: 'Connection test failed. Check your access token.' });
+    } finally {
+      setSalesNavTesting(false);
+    }
+  };
+
+  // ── HubSpot handlers ─────────────────────────────────────────
+  const handleHubSpotSave = () => {
+    setHubSpotConfig(hubspotConfig);
+    setHubSpotSaved(true);
+    setTimeout(() => setHubSpotSaved(false), 3000);
+  };
+
+  const handleHubSpotTest = async () => {
+    if (!hubspotConfig.accessToken) {
+      setHubSpotTestResult({ success: false, message: 'Enter your HubSpot access token first.' });
+      return;
+    }
+    setHubSpotTesting(true);
+    setHubSpotTestResult(null);
+    try {
+      const result = await integrationsApi.testHubSpot({
+        access_token: hubspotConfig.accessToken,
+        max_contacts: hubspotConfig.maxContacts,
+      });
+      setHubSpotTestResult(result);
+    } catch {
+      setHubSpotTestResult({ success: false, message: 'Connection test failed. Check your HubSpot token.' });
+    } finally {
+      setHubSpotTesting(false);
+    }
+  };
+
+  // ── PhantomBuster handlers ────────────────────────────────────
+  const handlePbSave = () => {
+    setPhantomBusterConfig(pbConfig);
+    setPbSaved(true);
+    setTimeout(() => setPbSaved(false), 3000);
+  };
+
+  const handlePbTest = async () => {
+    if (!pbConfig.apiKey) {
+      setPbTestResult({ success: false, message: 'Enter your PhantomBuster API key first.' });
+      return;
+    }
+    setPbTesting(true);
+    setPbTestResult(null);
+    try {
+      const result = await integrationsApi.testPhantomBuster({
+        api_key: pbConfig.apiKey,
+        search_phantom_id: pbConfig.searchPhantomId,
+        connection_phantom_id: pbConfig.connectionPhantomId,
+        session_cookie: pbConfig.sessionCookie,
+        connections_per_launch: pbConfig.connectionsPerLaunch,
+      });
+      setPbTestResult({
+        success: result.status === 'ok',
+        message: result.status === 'ok'
+          ? `Connected! Account: ${result.email || 'unknown'}`
+          : (result.message || 'Connection failed.'),
+      });
+    } catch {
+      setPbTestResult({ success: false, message: 'Connection test failed. Check your API key.' });
+    } finally {
+      setPbTesting(false);
+    }
+  };
+
   const handleLiTestPublish = async () => {
     if (!liConfig.accessToken || !liConfig.authorUrn) {
       setLiPublishTestResult({ success: false, message: 'Fill in all LinkedIn fields first.' });
@@ -395,6 +566,7 @@ export default function SettingsPage() {
                 <MenuItem value="gemini">Google Gemini</MenuItem>
                 <MenuItem value="anthropic">Anthropic Claude</MenuItem>
                 <MenuItem value="grok">xAI (Grok)</MenuItem>
+                <MenuItem value="groq">Groq — Free Llama (Recommended)</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -495,6 +667,15 @@ export default function SettingsPage() {
                 <a href="https://console.xai.com" target="_blank" rel="noopener noreferrer">
                   console.xai.com
                 </a>
+              </Typography>
+            </li>
+            <li>
+              <Typography variant="body2">
+                <strong>Groq (Free Llama):</strong>{' '}
+                <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">
+                  console.groq.com/keys
+                </a>
+                {' '}— free tier, no credit card required
               </Typography>
             </li>
           </Box>
@@ -893,6 +1074,383 @@ export default function SettingsPage() {
             {outplayTestResult.message}
           </Alert>
         )}
+      </Paper>
+
+      {/* ──────────────────────── Apollo.io Integration ─────────────────── */}
+      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+          <Typography variant="subtitle1" fontWeight={600}>Apollo.io — Prospect Search (Agent 3)</Typography>
+          <Box
+            component="span"
+            sx={{
+              fontSize: 11, bgcolor: apolloConfig.apiKey ? 'success.main' : 'action.hover',
+              color: apolloConfig.apiKey ? 'white' : 'text.secondary',
+              px: 1, py: 0.25, borderRadius: 1,
+            }}
+          >
+            {apolloConfig.apiKey ? 'Configured' : 'Not Configured'}
+          </Box>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          Enables Agent 3 to fetch <strong>real B2B prospect profiles</strong> from Apollo.io instead of AI-generated dummy data.
+          Free tier provides 50 credits/month. Without this, Agent 3 falls back to LLM-generated prospect data.
+        </Typography>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={8}>
+            <TextField
+              label="Apollo.io API Key"
+              type={apolloShowKey ? 'text' : 'password'}
+              value={apolloConfig.apiKey}
+              onChange={(e) => setApolloConfigState((p) => ({ ...p, apiKey: e.target.value }))}
+              fullWidth size="small"
+              placeholder="Your Apollo.io API key"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setApolloShowKey((s) => !s)}>
+                      {apolloShowKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              label="Results Per Run"
+              type="number"
+              value={apolloConfig.perPage}
+              onChange={(e) => setApolloConfigState((p) => ({ ...p, perPage: parseInt(e.target.value) || 10 }))}
+              fullWidth size="small"
+              inputProps={{ min: 1, max: 25 }}
+              helperText="Max prospects to fetch (1–25)"
+            />
+          </Grid>
+        </Grid>
+
+        <Box display="flex" gap={2} mt={2.5} alignItems="center" flexWrap="wrap">
+          <Button variant="contained" size="small" onClick={handleApolloSave}
+            startIcon={apolloSaved ? <CheckCircleIcon /> : undefined}>
+            {apolloSaved ? 'Saved!' : 'Save Apollo Config'}
+          </Button>
+          <Button variant="outlined" size="small" onClick={handleApolloTest}
+            disabled={apolloTesting}
+            startIcon={apolloTesting ? <CircularProgress size={14} /> : undefined}>
+            {apolloTesting ? 'Testing…' : 'Test Connection'}
+          </Button>
+        </Box>
+
+        {apolloTestResult && (
+          <Alert severity={apolloTestResult.success ? 'success' : 'error'} sx={{ mt: 2, maxWidth: 500 }}
+            onClose={() => setApolloTestResult(null)}>
+            {apolloTestResult.message}
+          </Alert>
+        )}
+
+        <Divider sx={{ mt: 3, mb: 2 }} />
+        <Typography variant="caption" color="text.secondary">
+          Get your free API key at{' '}
+          <a href="https://app.apollo.io/settings/integrations/api" target="_blank" rel="noopener noreferrer">
+            app.apollo.io/settings/integrations/api
+          </a>
+          {' '}· Free tier: 50 credits/month · No credit card required
+        </Typography>
+      </Paper>
+
+      {/* ──────────────────────── Sales Navigator Integration ────────────── */}
+      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+          <Typography variant="subtitle1" fontWeight={600}>LinkedIn Sales Navigator — Primary Prospect Search (Agent 3)</Typography>
+          <Box
+            component="span"
+            sx={{
+              fontSize: 11, bgcolor: salesNavConfig.accessToken ? 'success.main' : 'action.hover',
+              color: salesNavConfig.accessToken ? 'white' : 'text.secondary',
+              px: 1, py: 0.25, borderRadius: 1,
+            }}
+          >
+            {salesNavConfig.accessToken ? 'Configured' : 'Not Configured'}
+          </Box>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Agent 3 will use Sales Navigator as the <strong>primary source</strong> for real B2B prospect profiles.
+          Falls back to Apollo.io, then AI generation if not configured or unavailable.
+          Requires a LinkedIn Sales Navigator Team/Enterprise plan and SNAP API partner access.
+        </Typography>
+        <Alert severity="info" sx={{ mb: 2.5 }} icon={false}>
+          <strong>Priority order for Agent 3 prospect sourcing:</strong>
+          {' '}Sales Navigator (this) → Apollo.io → AI-generated fallback
+        </Alert>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={8}>
+            <TextField
+              label="Sales Navigator Access Token"
+              type={salesNavShowToken ? 'text' : 'password'}
+              value={salesNavConfig.accessToken}
+              onChange={(e) => setSalesNavConfigState((p) => ({ ...p, accessToken: e.target.value }))}
+              fullWidth size="small"
+              placeholder="OAuth2 access token with r_sales_nav_search scope"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSalesNavShowToken((s) => !s)}>
+                      {salesNavShowToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+              helperText="OAuth2 token with r_sales_nav_profile + r_sales_nav_search scopes"
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              label="Prospects Per Run"
+              type="number"
+              value={salesNavConfig.count}
+              onChange={(e) => setSalesNavConfigState((p) => ({ ...p, count: parseInt(e.target.value) || 10 }))}
+              fullWidth size="small"
+              inputProps={{ min: 1, max: 25 }}
+              helperText="Prospects to fetch per run (1–25)"
+            />
+          </Grid>
+        </Grid>
+
+        <Box display="flex" gap={2} mt={2.5} alignItems="center" flexWrap="wrap">
+          <Button variant="contained" size="small" onClick={handleSalesNavSave}
+            startIcon={salesNavSaved ? <CheckCircleIcon /> : undefined}>
+            {salesNavSaved ? 'Saved!' : 'Save Sales Navigator Config'}
+          </Button>
+          <Button variant="outlined" size="small" onClick={handleSalesNavTest}
+            disabled={salesNavTesting}
+            startIcon={salesNavTesting ? <CircularProgress size={14} /> : undefined}>
+            {salesNavTesting ? 'Testing…' : 'Test Connection'}
+          </Button>
+        </Box>
+
+        {salesNavTestResult && (
+          <Alert severity={salesNavTestResult.success ? 'success' : 'error'} sx={{ mt: 2, maxWidth: 600 }}
+            onClose={() => setSalesNavTestResult(null)}>
+            {salesNavTestResult.message}
+          </Alert>
+        )}
+
+        <Divider sx={{ mt: 3, mb: 2 }} />
+        <Typography variant="caption" color="text.secondary">
+          Get your access token via LinkedIn OAuth2 with scopes: <code>r_sales_nav_profile r_sales_nav_search</code>.
+          Requires Sales Navigator Team or Enterprise subscription + LinkedIn SNAP partner approval.
+        </Typography>
+      </Paper>
+
+      {/* ──────────────────────── HubSpot CRM Integration ───────────────── */}
+      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+          <Typography variant="subtitle1" fontWeight={600}>HubSpot CRM — Lead Source (Agent 2)</Typography>
+          <Box
+            component="span"
+            sx={{
+              fontSize: 11, bgcolor: hubspotConfig.accessToken ? 'success.main' : 'action.hover',
+              color: hubspotConfig.accessToken ? 'white' : 'text.secondary',
+              px: 1, py: 0.25, borderRadius: 1,
+            }}
+          >
+            {hubspotConfig.accessToken ? 'Configured' : 'Not Configured'}
+          </Box>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          When configured, Agent 2 automatically pulls contacts from your HubSpot CRM and merges them
+          with leads from the local database before processing. Duplicates are removed automatically.
+          Requires a HubSpot Private App with <strong>crm.objects.contacts.read</strong> scope.
+        </Typography>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={8}>
+            <TextField
+              label="HubSpot Private App Token"
+              type={hubspotShowToken ? 'text' : 'password'}
+              value={hubspotConfig.accessToken}
+              onChange={(e) => setHubSpotConfigState((p) => ({ ...p, accessToken: e.target.value }))}
+              fullWidth size="small"
+              placeholder="pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setHubSpotShowToken((s) => !s)}>
+                      {hubspotShowToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+              helperText="Create a Private App at HubSpot Settings → Integrations → Private Apps"
+            />
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <TextField
+              label="Max Contacts Per Run"
+              type="number"
+              value={hubspotConfig.maxContacts}
+              onChange={(e) => setHubSpotConfigState((p) => ({ ...p, maxContacts: parseInt(e.target.value) || 100 }))}
+              fullWidth size="small"
+              inputProps={{ min: 1, max: 1000 }}
+              helperText="Contacts to import per agent run (1–1000)"
+            />
+          </Grid>
+        </Grid>
+
+        <Box display="flex" gap={2} mt={2.5} alignItems="center" flexWrap="wrap">
+          <Button variant="contained" size="small" onClick={handleHubSpotSave}
+            startIcon={hubspotSaved ? <CheckCircleIcon /> : undefined}>
+            {hubspotSaved ? 'Saved!' : 'Save HubSpot Config'}
+          </Button>
+          <Button variant="outlined" size="small" onClick={handleHubSpotTest}
+            disabled={hubspotTesting}
+            startIcon={hubspotTesting ? <CircularProgress size={14} /> : undefined}>
+            {hubspotTesting ? 'Testing…' : 'Test Connection'}
+          </Button>
+        </Box>
+
+        {hubspotTestResult && (
+          <Alert severity={hubspotTestResult.success ? 'success' : 'error'} sx={{ mt: 2, maxWidth: 600 }}
+            onClose={() => setHubSpotTestResult(null)}>
+            {hubspotTestResult.message}
+          </Alert>
+        )}
+
+        <Divider sx={{ mt: 3, mb: 2 }} />
+        <Typography variant="caption" color="text.secondary">
+          Create a free Private App at{' '}
+          <a href="https://app.hubspot.com/private-apps" target="_blank" rel="noopener noreferrer">
+            app.hubspot.com/private-apps
+          </a>
+          {' '}· Required scope: <code>crm.objects.contacts.read</code>
+        </Typography>
+      </Paper>
+
+      {/* ──────────────────────── PhantomBuster Integration ─────────────── */}
+      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+          <Typography variant="subtitle1" fontWeight={600}>PhantomBuster — LinkedIn Prospect Discovery &amp; Connection Sending</Typography>
+          <Box
+            component="span"
+            sx={{
+              fontSize: 11, bgcolor: pbConfig.apiKey ? 'success.main' : 'action.hover',
+              color: pbConfig.apiKey ? 'white' : 'text.secondary',
+              px: 1, py: 0.25, borderRadius: 1,
+            }}
+          >
+            {pbConfig.apiKey ? 'Configured' : 'Not Configured'}
+          </Box>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          Agent 3 uses PhantomBuster to discover LinkedIn decision-makers at Agent 2&apos;s hot-lead companies
+          (via &quot;LinkedIn Search Export&quot; phantom) and send personalized connection requests
+          (via &quot;LinkedIn Connection Sender&quot; phantom). Falls back to Apollo or LLM if not configured.
+          Priority: <strong>PhantomBuster → Apollo → LLM</strong>.
+          Requires a <strong>14-day free trial</strong> at phantombuster.com.
+        </Typography>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="PhantomBuster API Key"
+              type={pbShowKey ? 'text' : 'password'}
+              value={pbConfig.apiKey}
+              onChange={(e) => setPbConfigState((p) => ({ ...p, apiKey: e.target.value }))}
+              fullWidth size="small"
+              placeholder="Your PhantomBuster API key"
+              helperText="Settings → API in your PhantomBuster dashboard"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setPbShowKey((s) => !s)}>
+                      {pbShowKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Search Phantom ID"
+              value={pbConfig.searchPhantomId}
+              onChange={(e) => setPbConfigState((p) => ({ ...p, searchPhantomId: e.target.value }))}
+              fullWidth size="small"
+              placeholder="Agent ID of LinkedIn Search Export phantom"
+              helperText='Phantom Store → "LinkedIn Search Export" → Agent ID'
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Connection Phantom ID"
+              value={pbConfig.connectionPhantomId}
+              onChange={(e) => setPbConfigState((p) => ({ ...p, connectionPhantomId: e.target.value }))}
+              fullWidth size="small"
+              placeholder="Agent ID of LinkedIn Connection Sender phantom"
+              helperText='Phantom Store → "LinkedIn Connection Sender" → Agent ID'
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Connections Per Launch"
+              type="number"
+              value={pbConfig.connectionsPerLaunch}
+              onChange={(e) => setPbConfigState((p) => ({ ...p, connectionsPerLaunch: parseInt(e.target.value) || 10 }))}
+              fullWidth size="small"
+              inputProps={{ min: 1, max: 20 }}
+              helperText="Max connection requests per run (1–20, default 10)"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              label="LinkedIn Session Cookie (li_at)"
+              type={pbShowCookie ? 'text' : 'password'}
+              value={pbConfig.sessionCookie}
+              onChange={(e) => setPbConfigState((p) => ({ ...p, sessionCookie: e.target.value }))}
+              fullWidth size="small"
+              placeholder="Your LinkedIn li_at session cookie"
+              helperText="Browser DevTools → Application → Cookies → linkedin.com → li_at  ⚠ For demo/local use only"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setPbShowCookie((s) => !s)}>
+                      {pbShowCookie ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Grid>
+        </Grid>
+
+        <Box display="flex" gap={2} mt={2.5} alignItems="center" flexWrap="wrap">
+          <Button variant="contained" size="small" onClick={handlePbSave}
+            startIcon={pbSaved ? <CheckCircleIcon /> : undefined}>
+            {pbSaved ? 'Saved!' : 'Save PhantomBuster Config'}
+          </Button>
+          <Button variant="outlined" size="small" onClick={handlePbTest}
+            disabled={pbTesting}
+            startIcon={pbTesting ? <CircularProgress size={14} /> : undefined}>
+            {pbTesting ? 'Testing…' : 'Test Connection'}
+          </Button>
+        </Box>
+
+        {pbTestResult && (
+          <Alert severity={pbTestResult.success ? 'success' : 'error'} sx={{ mt: 2, maxWidth: 600 }}
+            onClose={() => setPbTestResult(null)}>
+            {pbTestResult.message}
+          </Alert>
+        )}
+
+        <Divider sx={{ mt: 3, mb: 2 }} />
+        <Typography variant="caption" color="text.secondary">
+          Setup guide: 1) Sign up at{' '}
+          <a href="https://phantombuster.com" target="_blank" rel="noopener noreferrer">phantombuster.com</a>
+          {' '}(14-day free trial) · 2) Phantom Store → &quot;LinkedIn Search Export&quot; → save → copy Agent ID ·
+          3) Phantom Store → &quot;LinkedIn Connection Sender&quot; → save → copy Agent ID ·
+          4) Run Agent 2 first to populate hot leads → then run Agent 3.
+        </Typography>
       </Paper>
 
       {/* ──────────────────────── Other Integrations (Coming Soon) ────────── */}

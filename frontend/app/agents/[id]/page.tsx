@@ -24,6 +24,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import DownloadIcon from '@mui/icons-material/Download';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import StepperFlow from '../../../components/agents/StepperFlow';
@@ -32,11 +33,13 @@ import StatusBadge from '../../../components/agents/StatusBadge';
 import { useAgentPoller } from '../../../lib/hooks/useAgentPoller';
 import { agent1Api, agent2Api, agent3Api, agent4Api, extractApiError } from '../../../services/api';
 import { getLLMConfig, appendLog, getAgentState, getWordPressConfig, getLinkedInConfig } from '../../../lib/storage';
-import { TopicRecord, LeadRecord, OutreachTargetRecord, ReportRecord } from '../../../types';
+import { TopicRecord, LeadRecord, OutreachTargetRecord, ReportRecord, BlogRecord } from '../../../types';
 
 const TOPIC_COLUMNS: Column[] = [
   { key: 'topic', label: 'Topic', type: 'truncate' },
   { key: 'status', label: 'Status', type: 'badge' },
+  { key: 'source', label: 'Source', type: 'badge' },
+  { key: 'source_company', label: 'From Company', type: 'truncate' },
   { key: 'quality_score', label: 'Quality Score', type: 'score' },
   { key: 'blog_title', label: 'Blog Title', type: 'truncate' },
   { key: 'url', label: 'Blog URL', type: 'link' },
@@ -47,18 +50,25 @@ const LEAD_COLUMNS: Column[] = [
   { key: 'email', label: 'Email' },
   { key: 'company', label: 'Company' },
   { key: 'category', label: 'Category', type: 'badge' },
+  { key: 'analysis_status', label: 'Analysed', type: 'badge' },
   { key: 'campaign_label', label: 'Campaign' },
   { key: 'score', label: 'AI Score', type: 'score' },
-  { key: 'reasoning', label: 'Analysis', type: 'truncate' },
+  { key: 'outplay_enrolled', label: 'Outplay', type: 'badge' },
+  { key: 'klenty_enrolled', label: 'Klenty', type: 'badge' },
+  { key: 'reasoning', label: 'Analysis', type: 'analysis' },
   { key: 'processed_at', label: 'Processed', type: 'date' },
 ];
 
 const OUTREACH_COLUMNS: Column[] = [
-  { key: 'first_name', label: 'First Name' },
-  { key: 'last_name', label: 'Last Name' },
+  { key: 'first_name', label: 'First' },
+  { key: 'last_name', label: 'Last' },
   { key: 'email', label: 'Email' },
   { key: 'title', label: 'Title', type: 'truncate' },
   { key: 'company', label: 'Company' },
+  { key: 'is_dummy', label: 'Source', type: 'badge' },
+  { key: 'outreach_score', label: 'Fit Score', type: 'score' },
+  { key: 'outreach_reason', label: 'Fit Reason', type: 'tooltip' },
+  { key: 'connection_message', label: 'LinkedIn Note', type: 'tooltip' },
   { key: 'status', label: 'Status', type: 'badge' },
   { key: 'klenty_enrolled', label: 'Klenty' },
   { key: 'created_at', label: 'Created', type: 'date' },
@@ -77,19 +87,19 @@ const AGENT_META: Record<string, { name: string; description: string; steps: num
     name: 'Content Writer & SEO',
     description:
       'Generates SEO-optimized blog posts, runs quality checks, creates LinkedIn posts, and publishes to WordPress.',
-    steps: 7,
+    steps: 8,
   },
   agent2: {
     name: 'Lead Qualification',
     description:
-      'Deduplicates leads, scrapes websites, scores for travel industry fit using AI, and auto-enrolls into Klenty campaigns.',
-    steps: 7,
+      'Deduplicates leads, scrapes websites, scores for travel industry fit using AI, seeds blog topics to Agent 1, and auto-enrolls into Klenty/Outplay campaigns.',
+    steps: 8,
   },
   agent3: {
     name: 'LinkedIn Outbound',
     description:
-      'AI-generates B2B prospect profiles for the travel industry, filters decision-makers, and auto-enrolls approved prospects into Klenty email sequences.',
-    steps: 7,
+      'Reads Agent 2 hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved prospects.',
+    steps: 8,
   },
   agent4: {
     name: 'Analytics & Reports',
@@ -117,6 +127,7 @@ export default function AgentDetailPage() {
   const router = useRouter();
   const [tabValue, setTabValue] = useState(0);
   const [topics, setTopics] = useState<TopicRecord[]>([]);
+  const [blogs, setBlogs] = useState<BlogRecord[]>([]);
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [outreachTargets, setOutreachTargets] = useState<OutreachTargetRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
@@ -163,15 +174,20 @@ export default function AgentDetailPage() {
     const cached = getAgentState(agentId as 'agent1' | 'agent2' | 'agent3' | 'agent4');
     if (cached) setStatus(cached);
     if (cached?.status === 'running') startPolling();
-    if (isAgent1) agent1Api.getTopics().then(setTopics).catch(() => { });
-    else if (isAgent2) agent2Api.getLeads().then(setLeads).catch(() => { });
+    if (isAgent1) {
+      agent1Api.getTopics().then(setTopics).catch(() => { });
+      agent1Api.getBlogs().then(setBlogs).catch(() => { });
+    } else if (isAgent2) agent2Api.getLeads().then(setLeads).catch(() => { });
     else if (isAgent3) agent3Api.getOutreachTargets().then(setOutreachTargets).catch(() => { });
     else if (isAgent4) agent4Api.getReports().then(setReports).catch(() => { });
   }, [id, isImplemented, isAgent1, isAgent2, isAgent3, isAgent4, agentId, setStatus, startPolling]);
 
   useEffect(() => {
     if (status?.status === 'completed') {
-      if (isAgent1) agent1Api.getTopics().then(setTopics);
+      if (isAgent1) {
+        agent1Api.getTopics().then(setTopics);
+        agent1Api.getBlogs().then(setBlogs);
+      }
       if (isAgent2) agent2Api.getLeads().then(setLeads);
       if (isAgent3) agent3Api.getOutreachTargets().then(setOutreachTargets);
       if (isAgent4) agent4Api.getReports().then(setReports);
@@ -279,6 +295,22 @@ export default function AgentDetailPage() {
     } finally {
       setApprovingId(null);
     }
+  };
+
+  const downloadBlogHtml = (blog: BlogRecord) => {
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const a = document.createElement('a');
+    a.href = `${BASE_URL}/agents/agent1/blogs/${blog.id}/download?format=html`;
+    a.download = `${blog.slug || 'blog'}.html`;
+    a.click();
+  };
+
+  const downloadLinkedInTxt = (blog: BlogRecord) => {
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const a = document.createElement('a');
+    a.href = `${BASE_URL}/agents/agent1/blogs/${blog.id}/download?format=linkedin`;
+    a.download = `linkedin-${blog.slug || 'post'}.txt`;
+    a.click();
   };
 
   if (!isImplemented) {
@@ -450,6 +482,7 @@ export default function AgentDetailPage() {
                 isAgent3 ? 'Outreach Targets' :
                 'Reports'
               } />
+              {(isAgent1 || isAgent2) && <Tab label="Downloads" />}
               {(isAgent1 || isAgent2) && <Tab label="Add Data" />}
             </Tabs>
 
@@ -458,10 +491,60 @@ export default function AgentDetailPage() {
                 <ResultsTable columns={TOPIC_COLUMNS} rows={topics as unknown as Record<string, unknown>[]}
                   emptyMessage="No topics yet. Add some in the 'Add Data' tab and run the agent." />
               )}
-              {tabValue === 0 && isAgent2 && (
-                <ResultsTable columns={LEAD_COLUMNS} rows={leads as unknown as Record<string, unknown>[]}
-                  emptyMessage="No leads yet. Add some in the 'Add Data' tab and run the agent." />
-              )}
+              {tabValue === 0 && isAgent2 && (() => {
+                const lastRunId = status?.run_id;
+                const outplayThisRun = lastRunId
+                  ? leads.filter((l) => l.outplay_enrolled_run_id === lastRunId)
+                  : [];
+                const klentyThisRun = lastRunId
+                  ? leads.filter((l) => l.klenty_enrolled_run_id === lastRunId)
+                  : [];
+                const hasEnrollments = outplayThisRun.length > 0 || klentyThisRun.length > 0;
+                return (
+                  <Box>
+                    {hasEnrollments && (
+                      <Box mb={2} p={2} sx={{ border: 1, borderColor: 'success.main', borderRadius: 2, bgcolor: 'success.50' }}>
+                        <Typography variant="subtitle2" color="success.dark" gutterBottom>
+                          Last Run — Enrolled Leads
+                        </Typography>
+                        {outplayThisRun.length > 0 && (
+                          <Box mb={1}>
+                            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                              Outplay ({outplayThisRun.length} lead{outplayThisRun.length !== 1 ? 's' : ''})
+                            </Typography>
+                            <Box display="flex" flexWrap="wrap" gap={0.5}>
+                              {outplayThisRun.map((l) => (
+                                <Chip key={l.id || l.email} label={l.email} size="small" color="success" variant="outlined" />
+                              ))}
+                            </Box>
+                          </Box>
+                        )}
+                        {klentyThisRun.length > 0 && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                              Klenty ({klentyThisRun.length} lead{klentyThisRun.length !== 1 ? 's' : ''})
+                            </Typography>
+                            <Box display="flex" flexWrap="wrap" gap={0.5}>
+                              {klentyThisRun.map((l) => (
+                                <Chip key={l.id || l.email} label={l.email} size="small" color="primary" variant="outlined" />
+                              ))}
+                            </Box>
+                          </Box>
+                        )}
+                      </Box>
+                    )}
+                    <ResultsTable
+                      columns={LEAD_COLUMNS}
+                      rows={leads.map((l) => ({
+                        ...l,
+                        outplay_enrolled: l.outplay_enrolled ? 'Enrolled' : 'Not enrolled',
+                        klenty_enrolled:  l.klenty_enrolled  ? 'Enrolled' : 'Not enrolled',
+                      })) as unknown as Record<string, unknown>[]}
+                      emptyMessage="No leads yet. Add some in the 'Add Data' tab and run the agent."
+                    />
+                  </Box>
+                );
+              })()}
               {tabValue === 0 && isAgent3 && (
                 <Box>
                   {formError && (
@@ -541,7 +624,117 @@ export default function AgentDetailPage() {
                 </Box>
               )}
 
-              {tabValue === 1 && (isAgent1 || isAgent2) && (
+              {tabValue === 1 && isAgent1 && (
+                <Box>
+                  <Typography variant="h6" gutterBottom>Download Generated Content</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Download blog posts as HTML and LinkedIn posts as TXT — available even if WordPress or LinkedIn integration is not configured.
+                  </Typography>
+                  {blogs.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                      No published blogs yet. Run the agent first to generate content.
+                    </Typography>
+                  ) : (
+                    <Box>
+                      {[...blogs].reverse().map((blog) => (
+                        <Box
+                          key={blog.id}
+                          display="flex"
+                          alignItems="center"
+                          gap={2}
+                          flexWrap="wrap"
+                          p={2}
+                          mb={1.5}
+                          sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}
+                        >
+                          <Box flex={1} minWidth={0}>
+                            <Typography variant="body2" fontWeight={600} noWrap>
+                              {blog.title || blog.topic}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {blog.quality_score ? `Score: ${blog.quality_score}/100  ·  ` : ''}
+                              {blog.slug ? `${blog.slug}  ·  ` : ''}
+                              {blog.created_at ? new Date(blog.created_at).toLocaleDateString() : ''}
+                            </Typography>
+                          </Box>
+                          <Box display="flex" gap={1} flexShrink={0}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<DownloadIcon fontSize="small" />}
+                              onClick={() => downloadBlogHtml(blog)}
+                              disabled={!blog.id}
+                            >
+                              Blog HTML
+                            </Button>
+                            {blog.linkedin_post && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                startIcon={<DownloadIcon fontSize="small" />}
+                                onClick={() => downloadLinkedInTxt(blog)}
+                                disabled={!blog.id}
+                              >
+                                LinkedIn TXT
+                              </Button>
+                            )}
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              )}
+
+              {tabValue === 1 && isAgent2 && (
+                <Box>
+                  <Typography variant="h6" gutterBottom>Download Leads Analysis</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    Export leads as CSV. Filter by campaign to download a specific segment.
+                  </Typography>
+                  {leads.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+                      No leads yet. Add some in the &apos;Add Data&apos; tab and run the agent.
+                    </Typography>
+                  ) : (
+                    <Box display="flex" flexDirection="column" gap={1.5}>
+                      {[
+                        { label: 'All Leads', campaign: undefined, color: 'primary' as const },
+                        { label: 'Campaign A — Fit Clients', campaign: 'A', color: 'success' as const },
+                        { label: 'Campaign B — Warm Leads', campaign: 'B', color: 'warning' as const },
+                        { label: 'Campaign C — Cold Leads', campaign: 'C', color: 'info' as const },
+                        { label: 'Not Fit — Notify Rupesh', campaign: 'notify_rupesh', color: 'error' as const },
+                      ].map(({ label, campaign, color }) => {
+                        const count = campaign
+                          ? leads.filter((l) => l.campaign === campaign).length
+                          : leads.length;
+                        return (
+                          <Box key={label} display="flex" alignItems="center" gap={2} p={1.5}
+                            sx={{ border: 1, borderColor: 'divider', borderRadius: 2 }}>
+                            <Box flex={1}>
+                              <Typography variant="body2" fontWeight={600}>{label}</Typography>
+                              <Typography variant="caption" color="text.secondary">{count} lead{count !== 1 ? 's' : ''}</Typography>
+                            </Box>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color={color}
+                              startIcon={<DownloadIcon fontSize="small" />}
+                              onClick={() => agent2Api.downloadLeads(campaign)}
+                              disabled={count === 0}
+                            >
+                              Download CSV
+                            </Button>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  )}
+                </Box>
+              )}
+
+              {((isAgent1 && tabValue === 2) || (isAgent2 && tabValue === 2)) && (
                 <Box>
                   {formError && (
                     <Alert severity="error" sx={{ mb: 2 }} onClose={() => setFormError('')}>{formError}</Alert>

@@ -6,9 +6,11 @@ import {
   Typography,
   CircularProgress,
   Box,
+  Tooltip,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 import { StepStatus } from '../../types';
@@ -23,6 +25,8 @@ function StepIconComponent({ status }: { status: string }) {
       return <CheckCircleIcon color="success" sx={{ fontSize: 22 }} />;
     case 'failed':
       return <ErrorIcon color="error" sx={{ fontSize: 22 }} />;
+    case 'warning':
+      return <WarningAmberIcon sx={{ fontSize: 22, color: 'warning.main' }} />;
     case 'running':
       return <CircularProgress size={20} thickness={4} />;
     case 'skipped':
@@ -72,6 +76,8 @@ export default function StepperFlow({ steps }: Props) {
               color={
                 step.status === 'failed'
                   ? 'error.main'
+                  : step.status === 'warning'
+                  ? 'warning.main'
                   : step.status === 'completed'
                   ? 'success.main'
                   : step.status === 'running'
@@ -84,9 +90,15 @@ export default function StepperFlow({ steps }: Props) {
           </StepLabel>
           {step.message && (
             <StepContent>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {step.message}
-              </Typography>
+              <Tooltip title={step.status === 'warning' ? step.message : ''} placement="bottom-start">
+                <Typography
+                  variant="caption"
+                  color={step.status === 'warning' ? 'warning.main' : 'text.secondary'}
+                  sx={{ display: 'block', fontStyle: step.status === 'warning' ? 'italic' : 'normal' }}
+                >
+                  {step.message}
+                </Typography>
+              </Tooltip>
             </StepContent>
           )}
         </Step>

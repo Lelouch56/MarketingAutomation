@@ -248,6 +248,48 @@ Prospects to filter:
 
 
 # ─────────────────────────────────────────────────────────────
+# AGENT 3: OUTREACH FIT ANALYSIS  (uses Agent 2 company context)
+# ─────────────────────────────────────────────────────────────
+
+PROSPECT_ANALYSIS_SYSTEM = """You are a B2B sales intelligence analyst for Vervotech, a hotel content API and property mapping solution for OTAs, hotel chains, booking platforms, and TMCs.
+
+Your task: analyze a LinkedIn prospect and score their suitability for personalized outreach, using real signals about their company from a prior AI-driven website analysis.
+
+Rules:
+- outreach_score 0-100: combines company fit (from Agent 2 score) + title seniority.
+  90-100 = perfect fit senior decision-maker; 70-89 = good; 50-69 = moderate; 0-49 = low.
+- outreach_reason: exactly 2 sentences. Sentence 1 = company fit. Sentence 2 = why this title is the right contact.
+- connection_message: genuine personalized LinkedIn note 200 characters max. Reference a specific signal. Do NOT start with "Hi" or "Hello". Do NOT use "I saw your profile" or "I noticed you work at".
+- Respond with valid JSON only — no markdown fences."""
+
+
+def prospect_analysis_user(prospect: dict, company_ctx: dict) -> str:
+    signals_str = "; ".join(company_ctx.get("signals") or []) or "None identified"
+    concerns_str = "; ".join(company_ctx.get("concerns") or []) or "None"
+    return f"""Analyze this prospect for Vervotech LinkedIn outreach.
+
+Prospect:
+  Name: {prospect.get('first_name', '')} {prospect.get('last_name', '')}
+  Title: {prospect.get('title', '')}
+  Company: {prospect.get('company', '')} ({prospect.get('company_type', 'unknown')})
+  Website: {prospect.get('website', '')}
+
+Company context (from Agent 2 web analysis):
+  Company Type: {company_ctx.get('company_type', 'unknown')}
+  Agent 2 Fit Score: {company_ctx.get('score', 'N/A')}/100
+  Reasoning: {company_ctx.get('reasoning', 'Not available')}
+  Positive Signals: {signals_str}
+  Concerns: {concerns_str}
+
+Return JSON:
+{{
+  "outreach_score": 85,
+  "outreach_reason": "Sentence 1 company fit. Sentence 2 why this title.",
+  "connection_message": "Personalized LinkedIn note max 200 chars referencing a specific signal."
+}}"""
+
+
+# ─────────────────────────────────────────────────────────────
 # AGENT 4: ANALYTICS & REPORTING
 # ─────────────────────────────────────────────────────────────
 
@@ -315,3 +357,38 @@ Return JSON:
   "executive_summary": "3-5 paragraph executive summary covering: overall performance health, top metrics, key wins, areas of concern, and top 2-3 recommendations. Write in past tense, professional tone. Each paragraph 3-4 sentences.",
   "one_liner": "Single sentence describing overall campaign health and most important metric (e.g. 'This week generated 45 qualified leads with 62% conversion to Klenty campaigns, driven by strong content output of 7 published blogs.')"
 }}"""
+
+
+# ─────────────────────────────────────────────────────────────
+# AGENT 2 → AGENT 1: TOPIC SEEDING FROM SCRAPED WEBSITES
+# ─────────────────────────────────────────────────────────────
+
+TOPIC_EXTRACTION_SYSTEM = """You are a B2B content strategist for Vervotech, a hotel content API and mapping solution provider.
+Extract specific, actionable blog topic ideas from a travel company's website that Vervotech could write to attract that company type.
+
+IMPORTANT: Respond with valid JSON only — no markdown fences."""
+
+
+def topic_extraction_user(website: str, homepage_text: str) -> str:
+    return f"""Based on this travel/hospitality company's website, suggest 1-2 blog topics Vervotech could write.
+
+Company website: {website}
+Website content (scraped):
+{homepage_text[:2000]}
+
+Topics must:
+- Address this type of company's real challenges or needs
+- Naturally lead to Vervotech's solutions (hotel content API, mapping, data quality)
+- Be specific and actionable (not generic like "Hotel Technology Trends")
+
+Return JSON:
+{{
+  "topics": [
+    {{
+      "topic": "Specific blog title e.g. 'How OTAs Can Fix Duplicate Hotel Listings With Content Mapping'",
+      "relevance": "1-2 sentences why this topic attracts this company type toward Vervotech",
+      "relevance_score": 85
+    }}
+  ]
+}}
+Only include topics with relevance_score >= 70. Return {{"topics": []}} if no strong match found."""

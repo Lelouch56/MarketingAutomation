@@ -28,5 +28,5 @@ def root():
     return {
         "message": "Marketing Automation AI Backend Running",
         "version": "1.0.0",
-        "agents": ["agent1", "agent2", "agent3", "agent4"],
+        "agents": ["agent1", "agent2", "agent4", "agent3"],
     }
