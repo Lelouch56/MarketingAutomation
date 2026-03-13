@@ -212,7 +212,7 @@ export const integrationsApi = {
   testLinkedIn: (config: {
     access_token: string;
     author_urn: string;
-  }): Promise<{ success: boolean; message: string; name?: string }> =>
+  }): Promise<{ success: boolean; message: string; name?: string; person_urn?: string }> =>
     http.post('/integrations/test/linkedin', config).then((r) => r.data),
 
   testLinkedInPublish: (config: {
