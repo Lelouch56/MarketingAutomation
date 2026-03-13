@@ -603,5 +603,27 @@
     "source_lead_email": "prashant@traveltech.com",
     "llm_relevance": "This topic is relevant because it highlights the importance of accurate mapping in traveltech, an area where Vervotech's mapping solutions can provide significant value. By discussing the benefits of precise hotel locations and how to achieve them, Vervotech can demonstrate its expertise and attract traveltech companies looking to enhance their user experience.",
     "relevance_score": 88
+  },
+  {
+    "id": "74619983-6b32-4ec5-8505-101f14facb34",
+    "topic": "Eliminating Hotel Inventory Errors to Boost Direct Bookings for OTAs",
+    "status": "Pending",
+    "created_at": "2026-03-13T15:15:41.644584+00:00",
+    "source": "web_scrape",
+    "source_company": "https://www.techspian.com/",
+    "source_lead_email": "sanjay@techspian.com",
+    "llm_relevance": "This topic addresses a common pain point for OTAs, which struggle to maintain accurate hotel inventory and listings. Vervotech's hotel content API and mapping solution can help OTAs fix inventory errors and improve their direct booking rates.",
+    "relevance_score": 87
+  },
+  {
+    "id": "ee8ef4ad-24d7-485a-be8b-4112d536947f",
+    "topic": "The Impact of Inaccurate Hotel Data on Travel Experiences and How APIs Can Help",
+    "status": "Pending",
+    "created_at": "2026-03-13T15:15:41.651952+00:00",
+    "source": "web_scrape",
+    "source_company": "https://www.techspian.com/",
+    "source_lead_email": "sanjay@techspian.com",
+    "llm_relevance": "This topic highlights the consequences of inaccurate hotel data on travel experiences, which is a concern for travel companies that prioritize customer satisfaction. Vervotech's hotel content API and mapping solution can help travel companies ensure accurate and up-to-date hotel data.",
+    "relevance_score": 82
   }
 ]

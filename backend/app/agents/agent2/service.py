@@ -529,20 +529,29 @@ def _step6_assign_campaigns(
 
 def _step7_extract_topics(leads: list, website_texts: dict, llm_config: LLMConfig) -> dict:
     """
-    For each AI-analyzed Hot lead with scraped website content, use the LLM to
-    extract potential Vervotech blog topics and seed them into topics.json
+    For each Qualified lead where industry_fit=True (confirmed travel/hospitality company),
+    use the LLM to extract potential Vervotech blog topics and seed them into topics.json
     (Agent 1's Pending queue). Skips exact-title duplicates.
+
+    Only travel-relevant leads (industry_fit=True) are processed — leads where the AI
+    determined the company has no meaningful travel/hospitality connection are excluded.
+    Sorted by ICP score descending so the best matches are processed first.
     Processes at most 5 leads to keep run time bounded.
     Returns {added, skipped, processed} summary.
     """
     existing = topics_db.read()
     existing_titles = {t.get("topic", "").lower().strip() for t in existing}
 
-    candidates = [
-        l for l in leads
-        if l.get("analysis_status") == "completed"
-        and website_texts.get((l.get("email") or "").lower())
-    ][:5]  # cap at 5 to limit LLM API calls
+    candidates = sorted(
+        [
+            l for l in leads
+            if l.get("analysis_status") == "completed"
+            and l.get("industry_fit") is True          # only confirmed travel/hospitality companies
+            and website_texts.get((l.get("email") or "").lower())
+        ],
+        key=lambda x: (x.get("score") or 0),
+        reverse=True,                                  # highest ICP score leads processed first
+    )[:5]  # cap at 5 to limit LLM API calls
 
     added, skipped = 0, 0
     for lead in candidates:
@@ -705,7 +714,8 @@ def run_agent2_background(
         _update_step(6, "completed", f"{seq_a_count} Qualified → Sequence A, {seq_b_count} Personal → Sequence B, {nurture_count} Nurture flagged for manual review{enroll_msg}")
 
         # ── Step 7: Extract topics for Agent 1 ─────────────────────────
-        _update_step(7, "running", "Extracting blog topics from scraped websites for Agent 1...")
+        travel_leads = sum(1 for l in leads if l.get("industry_fit") is True)
+        _update_step(7, "running", f"Extracting blog topics from {travel_leads} confirmed travel-relevant lead{'' if travel_leads == 1 else 's'} for Agent 1 (up to 5 processed)...")
         topic_summary = _step7_extract_topics(leads, website_texts, llm_config)
         topic_msg = f"Seeded {topic_summary['added']} new blog topics to Agent 1"
         if topic_summary['skipped']:
