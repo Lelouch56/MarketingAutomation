@@ -31,19 +31,28 @@ class LinkedInConfigModel(BaseModel):
     author_urn: str     # "urn:li:person:xxx" or "urn:li:organization:xxx"
 
 
+class LinkedInImageTestModel(BaseModel):
+    access_token: str
+    author_urn: str
+    image_url: str          # publicly accessible image URL (JPEG/PNG)
+    post_text: Optional[str] = None  # custom caption; defaults to a test message
+
+
 class KlentyConfigModel(BaseModel):
     api_key: str
     user_email: str          # Klenty account email used as API identifier
-    campaign_a_name: str = "Campaign A"   # Fit clients (score > 70)
-    campaign_b_name: str = "Campaign B"   # Warm leads
-    campaign_c_name: str = "Campaign C"   # Cold leads
+    campaign_a_name: str = "Campaign A"   # Qualified leads (score > 70)
+    campaign_b_name: str = "Campaign B"   # Personal leads (Gmail/Yahoo/etc.)
+    campaign_c_name: str = "Campaign C"   # Optional — Nurture leads
 
 
 class OutplayConfigModel(BaseModel):
-    api_key: str
-    sequence_name_a: str = "Travel Fit Sequence"    # Fit clients (score > 70)
-    sequence_name_b: str = "Warm Lead Sequence"     # Warm leads
-    sequence_name_c: str = "Cold Lead Sequence"     # Cold leads
+    client_secret: str                              # X-CLIENT-SECRET header
+    client_id: str = ""                             # ?client_id= query param
+    user_id: str = ""                               # Outplay user ID (required for sequence enrollment)
+    location: str = "us4"                           # Regional server, e.g. "us4"
+    sequence_id_a: str = ""                         # Qualified Lead Marktech (score > 70)
+    sequence_id_b: str = ""                         # Personal Lead Marktech (Gmail/Yahoo/etc.)
 
 
 class ApolloConfigModel(BaseModel):
@@ -59,6 +68,7 @@ class SalesNavigatorConfigModel(BaseModel):
 class HubSpotConfigModel(BaseModel):
     access_token: str
     max_contacts: int = 100
+    list_id: str = ""       # Number from objectLists/N in HubSpot URL (e.g. 9)
 
 
 class PhantomBusterConfigModel(BaseModel):

@@ -32,7 +32,7 @@ import ResultsTable, { Column } from '../../../components/data/ResultsTable';
 import StatusBadge from '../../../components/agents/StatusBadge';
 import { useAgentPoller } from '../../../lib/hooks/useAgentPoller';
 import { agent1Api, agent2Api, agent3Api, agent4Api, extractApiError } from '../../../services/api';
-import { getLLMConfig, appendLog, getAgentState, getWordPressConfig, getLinkedInConfig } from '../../../lib/storage';
+import { getLLMConfig, appendLog, getAgentState, getLinkedInConfig } from '../../../lib/storage';
 import { TopicRecord, LeadRecord, OutreachTargetRecord, ReportRecord, BlogRecord } from '../../../types';
 
 const TOPIC_COLUMNS: Column[] = [
@@ -54,7 +54,6 @@ const LEAD_COLUMNS: Column[] = [
   { key: 'campaign_label', label: 'Campaign' },
   { key: 'score', label: 'AI Score', type: 'score' },
   { key: 'outplay_enrolled', label: 'Outplay', type: 'badge' },
-  { key: 'klenty_enrolled', label: 'Klenty', type: 'badge' },
   { key: 'reasoning', label: 'Analysis', type: 'analysis' },
   { key: 'processed_at', label: 'Processed', type: 'date' },
 ];
@@ -84,25 +83,25 @@ const REPORT_COLUMNS: Column[] = [
 
 const AGENT_META: Record<string, { name: string; description: string; steps: number }> = {
   agent1: {
-    name: 'Content Writer & SEO',
+    name: 'Hangout Social',
     description:
-      'Generates SEO-optimized blog posts, runs quality checks, creates LinkedIn posts, and publishes to WordPress.',
+      'Generates SEO-optimized blog posts, runs quality checks, creates LinkedIn post text, and auto-posts to LinkedIn.',
     steps: 8,
   },
   agent2: {
-    name: 'Lead Qualification',
+    name: 'Matters',
     description:
-      'Deduplicates leads, scrapes websites, scores for travel industry fit using AI, seeds blog topics to Agent 1, and auto-enrolls into Klenty/Outplay campaigns.',
+      'Deduplicates leads, scrapes websites, scores for travel industry fit using AI, seeds blog topics to Hangout Social, and auto-enrolls into Klenty/Outplay campaigns.',
     steps: 8,
   },
   agent3: {
-    name: 'LinkedIn Outbound',
+    name: 'Matters broad',
     description:
-      'Reads Agent 2 hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved prospects.',
+      'Reads Matters hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved prospects.',
     steps: 8,
   },
   agent4: {
-    name: 'Analytics & Reports',
+    name: 'Ringside View',
     description:
       'Aggregates data from all agents, generates AI-powered performance insights, and creates executive reports with funnel visualizations.',
     steps: 6,
@@ -144,8 +143,7 @@ export default function AgentDetailPage() {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Agent 1 publish toggles — only relevant when respective integration is configured
-  const [enableWordPress, setEnableWordPress] = useState(true);
+  // Agent 1 LinkedIn toggle — only relevant when LinkedIn is configured
   const [enableLinkedIn, setEnableLinkedIn] = useState(true);
 
   const isAgent1 = id === 'agent1';
@@ -201,7 +199,7 @@ export default function AgentDetailPage() {
       return;
     }
     try {
-      if (isAgent1) await agent1Api.run({ wordpress: enableWordPress, linkedin: enableLinkedIn });
+      if (isAgent1) await agent1Api.run({ linkedin: enableLinkedIn });
       else if (isAgent2) await agent2Api.run();
       else if (isAgent3) await agent3Api.run();
       else await agent4Api.run();
@@ -218,7 +216,7 @@ export default function AgentDetailPage() {
     } catch (e: unknown) {
       setRunError(e instanceof Error ? e.message : 'Failed to start agent');
     }
-  }, [isAgent1, isAgent2, isAgent3, id, meta.name, startPolling, enableWordPress, enableLinkedIn]);
+  }, [isAgent1, isAgent2, isAgent3, id, meta.name, startPolling, enableLinkedIn]);
 
   const handleAddTopic = async () => {
     if (!newTopicText.trim()) { setFormError('Topic cannot be empty'); return; }
@@ -362,20 +360,7 @@ export default function AgentDetailPage() {
 
         {isAgent1 && (
           <Box display="flex" gap={3} alignItems="center" sx={{ pl: 0.5 }}>
-            <Tooltip title={getWordPressConfig()?.siteUrl ? 'Publish blog to WordPress' : 'WordPress not configured in Settings'}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={enableWordPress}
-                    onChange={(e) => setEnableWordPress(e.target.checked)}
-                    size="small"
-                    disabled={!getWordPressConfig()?.siteUrl}
-                  />
-                }
-                label={<Typography variant="caption" color={getWordPressConfig()?.siteUrl ? 'text.primary' : 'text.disabled'}>WordPress</Typography>}
-              />
-            </Tooltip>
-            <Tooltip title={getLinkedInConfig()?.accessToken ? 'Post to LinkedIn after publishing' : 'LinkedIn not configured in Settings'}>
+            <Tooltip title={getLinkedInConfig()?.accessToken ? 'Post to LinkedIn after blog generation' : 'LinkedIn not configured in Settings — add access token to enable auto-posting'}>
               <FormControlLabel
                 control={
                   <Switch
@@ -385,7 +370,7 @@ export default function AgentDetailPage() {
                     disabled={!getLinkedInConfig()?.accessToken}
                   />
                 }
-                label={<Typography variant="caption" color={getLinkedInConfig()?.accessToken ? 'text.primary' : 'text.disabled'}>LinkedIn</Typography>}
+                label={<Typography variant="caption" color={getLinkedInConfig()?.accessToken ? 'text.primary' : 'text.disabled'}>Post to LinkedIn</Typography>}
               />
             </Tooltip>
           </Box>
@@ -418,7 +403,7 @@ export default function AgentDetailPage() {
               <StatCard label="Total Leads" value={leads.length} />
             </Grid>
             <Grid item xs={6} sm={3}>
-              <StatCard label="Fit Clients (Campaign A)" value={leads.filter((l) => l.campaign === 'A').length} />
+              <StatCard label="Qualified Leads (Sequence A)" value={leads.filter((l) => l.campaign === 'A').length} />
             </Grid>
           </>
         )}
@@ -496,41 +481,18 @@ export default function AgentDetailPage() {
                 const outplayThisRun = lastRunId
                   ? leads.filter((l) => l.outplay_enrolled_run_id === lastRunId)
                   : [];
-                const klentyThisRun = lastRunId
-                  ? leads.filter((l) => l.klenty_enrolled_run_id === lastRunId)
-                  : [];
-                const hasEnrollments = outplayThisRun.length > 0 || klentyThisRun.length > 0;
                 return (
                   <Box>
-                    {hasEnrollments && (
+                    {outplayThisRun.length > 0 && (
                       <Box mb={2} p={2} sx={{ border: 1, borderColor: 'success.main', borderRadius: 2, bgcolor: 'success.50' }}>
                         <Typography variant="subtitle2" color="success.dark" gutterBottom>
-                          Last Run — Enrolled Leads
+                          Last Run — Enrolled in Outplay Sequence ({outplayThisRun.length} lead{outplayThisRun.length !== 1 ? 's' : ''})
                         </Typography>
-                        {outplayThisRun.length > 0 && (
-                          <Box mb={1}>
-                            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-                              Outplay ({outplayThisRun.length} lead{outplayThisRun.length !== 1 ? 's' : ''})
-                            </Typography>
-                            <Box display="flex" flexWrap="wrap" gap={0.5}>
-                              {outplayThisRun.map((l) => (
-                                <Chip key={l.id || l.email} label={l.email} size="small" color="success" variant="outlined" />
-                              ))}
-                            </Box>
-                          </Box>
-                        )}
-                        {klentyThisRun.length > 0 && (
-                          <Box>
-                            <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
-                              Klenty ({klentyThisRun.length} lead{klentyThisRun.length !== 1 ? 's' : ''})
-                            </Typography>
-                            <Box display="flex" flexWrap="wrap" gap={0.5}>
-                              {klentyThisRun.map((l) => (
-                                <Chip key={l.id || l.email} label={l.email} size="small" color="primary" variant="outlined" />
-                              ))}
-                            </Box>
-                          </Box>
-                        )}
+                        <Box display="flex" flexWrap="wrap" gap={0.5}>
+                          {outplayThisRun.map((l) => (
+                            <Chip key={l.id || l.email} label={l.email} size="small" color="success" variant="outlined" />
+                          ))}
+                        </Box>
                       </Box>
                     )}
                     <ResultsTable
@@ -538,7 +500,6 @@ export default function AgentDetailPage() {
                       rows={leads.map((l) => ({
                         ...l,
                         outplay_enrolled: l.outplay_enrolled ? 'Enrolled' : 'Not enrolled',
-                        klenty_enrolled:  l.klenty_enrolled  ? 'Enrolled' : 'Not enrolled',
                       })) as unknown as Record<string, unknown>[]}
                       emptyMessage="No leads yet. Add some in the 'Add Data' tab and run the agent."
                     />
@@ -701,10 +662,10 @@ export default function AgentDetailPage() {
                     <Box display="flex" flexDirection="column" gap={1.5}>
                       {[
                         { label: 'All Leads', campaign: undefined, color: 'primary' as const },
-                        { label: 'Campaign A — Fit Clients', campaign: 'A', color: 'success' as const },
-                        { label: 'Campaign B — Warm Leads', campaign: 'B', color: 'warning' as const },
-                        { label: 'Campaign C — Cold Leads', campaign: 'C', color: 'info' as const },
-                        { label: 'Not Fit — Notify Rupesh', campaign: 'notify_rupesh', color: 'error' as const },
+                        { label: 'Qualified — Marktech Sequence A', campaign: 'A', color: 'success' as const },
+                        { label: 'Personal — Marktech Sequence B', campaign: 'B', color: 'info' as const },
+                        { label: 'Nurture — Need Manual Attention', campaign: 'nurture', color: 'warning' as const },
+                        { label: 'Disqualified — No Outreach', campaign: 'disqualified', color: 'error' as const },
                       ].map(({ label, campaign, color }) => {
                         const count = campaign
                           ? leads.filter((l) => l.campaign === campaign).length
@@ -784,8 +745,9 @@ export default function AgentDetailPage() {
                     <Box maxWidth={520}>
                       <Typography variant="h6" gutterBottom>Add New Lead</Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Business emails with websites → <Chip label="Hot" size="small" color="error" /> (AI-scored).
-                        Gmail/free domains → <Chip label="Warm" size="small" color="warning" />.
+                        Business email + website → <Chip label="Qualified" size="small" color="success" /> (AI-scored for ICP fit).
+                        Business email, no website → <Chip label="Nurture" size="small" color="warning" /> (manual review).
+                        Gmail/Yahoo/free domain → <Chip label="Personal" size="small" color="info" /> (Sequence B).
                       </Typography>
                       <Grid container spacing={2}>
                         <Grid item xs={12}>

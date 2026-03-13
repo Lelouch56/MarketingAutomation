@@ -740,5 +740,215 @@
       }
     },
     "power_bi_status": "queued_no_credentials"
+  },
+  {
+    "id": "07ec9f56-8529-4211-9a86-0a434c44e758",
+    "generated_at": "2026-03-13T14:13:13.204919+00:00",
+    "status": "complete",
+    "aggregated": {
+      "total_leads": 10,
+      "hot_leads": 6,
+      "warm_leads": 3,
+      "cold_leads": 1,
+      "fit_clients": 2,
+      "avg_lead_score": 16.5,
+      "klenty_enrolled_leads": 0,
+      "total_topics": 51,
+      "published_blogs": 10,
+      "avg_blog_quality": 46.1,
+      "total_outreach_targets": 16,
+      "outreach_approved": 0,
+      "outreach_enrolled": 0,
+      "outreach_pending": 16
+    },
+    "analysis": {
+      "funnel_summary": {
+        "total_leads": 10,
+        "hot_leads": 6,
+        "warm_leads": 3,
+        "cold_leads": 1,
+        "fit_clients": 2,
+        "outreach_targets": 16,
+        "klenty_enrolled": 0,
+        "blogs_published": 10,
+        "conversion_rate_pct": 20.0
+      },
+      "top_performing_content": [
+        {
+          "title": "",
+          "quality_score": 0,
+          "url": "",
+          "created_at": "2026-03-13T12:11:13.846378+00:00"
+        },
+        {
+          "title": "",
+          "quality_score": 0,
+          "url": "",
+          "created_at": "2026-03-13T08:52:32.074164+00:00"
+        },
+        {
+          "title": "",
+          "quality_score": 0,
+          "url": "",
+          "created_at": "2026-03-13T08:40:26.041279+00:00"
+        },
+        {
+          "title": "",
+          "quality_score": 0,
+          "url": "",
+          "created_at": "2026-03-13T08:34:48.986539+00:00"
+        },
+        {
+          "title": "",
+          "quality_score": 0,
+          "url": "",
+          "created_at": "2026-03-13T08:34:34.327775+00:00"
+        }
+      ],
+      "campaign_distribution": {
+        "B": 3,
+        "notify_rupesh": 4,
+        "C": 1,
+        "A": 2
+      },
+      "key_insights": [
+        "Total of 10 leads processed with 2 qualifying as fit clients.",
+        "Content pipeline published 10 blogs with avg quality score 46.1.",
+        "Overall lead-to-fit conversion rate: 20.0%."
+      ],
+      "recommendations": [
+        "Focus outreach on Hot leads with score > 70 for highest conversion.",
+        "Increase blog publishing frequency to improve organic traffic.",
+        "Review and approve pending outreach targets in Agent 3."
+      ],
+      "health_score": 50,
+      "health_rating": "Needs Attention"
+    },
+    "funnel_summary": {
+      "total_leads": 10,
+      "hot_leads": 6,
+      "warm_leads": 3,
+      "cold_leads": 1,
+      "fit_clients": 2,
+      "outreach_targets": 16,
+      "klenty_enrolled": 0,
+      "blogs_published": 10,
+      "conversion_rate_pct": 20.0
+    },
+    "campaign_distribution": {
+      "B": 3,
+      "notify_rupesh": 4,
+      "C": 1,
+      "A": 2
+    },
+    "key_insights": [
+      "Total of 10 leads processed with 2 qualifying as fit clients.",
+      "Content pipeline published 10 blogs with avg quality score 46.1.",
+      "Overall lead-to-fit conversion rate: 20.0%."
+    ],
+    "recommendations": [
+      "Focus outreach on Hot leads with score > 70 for highest conversion.",
+      "Increase blog publishing frequency to improve organic traffic.",
+      "Review and approve pending outreach targets in Agent 3."
+    ],
+    "health_score": 50,
+    "health_rating": "Needs Attention",
+    "top_content": [
+      {
+        "title": "",
+        "quality_score": 0,
+        "url": "",
+        "created_at": "2026-03-13T12:11:13.846378+00:00"
+      },
+      {
+        "title": "",
+        "quality_score": 0,
+        "url": "",
+        "created_at": "2026-03-13T08:52:32.074164+00:00"
+      },
+      {
+        "title": "",
+        "quality_score": 0,
+        "url": "",
+        "created_at": "2026-03-13T08:40:26.041279+00:00"
+      },
+      {
+        "title": "",
+        "quality_score": 0,
+        "url": "",
+        "created_at": "2026-03-13T08:34:48.986539+00:00"
+      },
+      {
+        "title": "",
+        "quality_score": 0,
+        "url": "",
+        "created_at": "2026-03-13T08:34:34.327775+00:00"
+      }
+    ],
+    "executive_summary": "This reporting period saw 10 leads processed with 2 qualifying as fit clients (20.0% conversion rate). The content pipeline published 10 blogs. Overall platform health: Needs Attention.",
+    "one_liner": "Processed 10 leads with 2 fit clients.",
+    "visualizations": {
+      "lead_funnel": {
+        "type": "bar",
+        "labels": [
+          "Total Leads",
+          "Hot",
+          "Fit Clients",
+          "Klenty Enrolled"
+        ],
+        "data": [
+          10,
+          6,
+          2,
+          0
+        ]
+      },
+      "campaign_distribution": {
+        "type": "pie",
+        "labels": [
+          "Campaign A (Fit)",
+          "Campaign B (Warm)",
+          "Campaign C (Cold)",
+          "Not Fit"
+        ],
+        "data": [
+          2,
+          3,
+          1,
+          4
+        ]
+      },
+      "lead_categories": {
+        "type": "donut",
+        "labels": [
+          "Hot",
+          "Warm",
+          "Cold"
+        ],
+        "data": [
+          6,
+          3,
+          1
+        ]
+      },
+      "content_quality": {
+        "type": "bar",
+        "labels": [
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        "data": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "power_bi_status": "queued_no_credentials"
   }
 ]

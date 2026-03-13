@@ -14,13 +14,14 @@ from fastapi.responses import Response
 
 from app.models import (
     RunAgentRequest, AgentRunStatus, TopicCreate, LeadCreate, LLMConfigModel,
-    WordPressConfigModel, LinkedInConfigModel, KlentyConfigModel, OutplayConfigModel, ApolloConfigModel,
+    WordPressConfigModel, LinkedInConfigModel, LinkedInImageTestModel, KlentyConfigModel, OutplayConfigModel, ApolloConfigModel,
     SalesNavigatorConfigModel, HubSpotConfigModel, PhantomBusterConfigModel,
 )
 from app.core.llm_provider import LLMConfig
 from app.core.integrations import (
     WordPressConfig, LinkedInConfig, KlentyConfig, OutplayConfig, ApolloConfig, SalesNavigatorConfig, HubSpotConfig,
-    PhantomBusterConfig,
+    PhantomBusterConfig, IntegrationError,
+    add_prospect_to_outplay, enroll_in_hubspot_sequence,
     test_wordpress_connection, test_linkedin_connection, test_klenty_connection, test_outplay_connection,
     test_apollo_connection, test_sales_navigator_connection, test_hubspot_connection,
     test_phantombuster_connection,
@@ -103,10 +104,12 @@ def _build_outplay_config(request: RunAgentRequest) -> Optional[OutplayConfig]:
     if not request.outplay:
         return None
     return OutplayConfig(
-        api_key=request.outplay.api_key,
-        sequence_name_a=request.outplay.sequence_name_a,
-        sequence_name_b=request.outplay.sequence_name_b,
-        sequence_name_c=request.outplay.sequence_name_c,
+        client_secret=request.outplay.client_secret,
+        client_id=request.outplay.client_id,
+        user_id=request.outplay.user_id,
+        location=request.outplay.location,
+        sequence_id_a=request.outplay.sequence_id_a,   # Qualified Lead Marktech
+        sequence_id_b=request.outplay.sequence_id_b,   # Personal Lead Marktech
     )
 
 
@@ -137,6 +140,7 @@ def _build_hubspot_config(request: RunAgentRequest) -> Optional[HubSpotConfig]:
     return HubSpotConfig(
         access_token=request.hubspot.access_token,
         max_contacts=request.hubspot.max_contacts,
+        list_id=request.hubspot.list_id or "",
     )
 
 
@@ -165,16 +169,6 @@ def run_agent1(request: RunAgentRequest, background_tasks: BackgroundTasks):
 
     config = _model_to_config(request.llm_config)
 
-    # Build optional integration configs
-    wp_config = None
-    if request.wordpress:
-        wp_config = WordPressConfig(
-            site_url=request.wordpress.site_url,
-            username=request.wordpress.username,
-            app_password=request.wordpress.app_password,
-            publish_status=request.wordpress.publish_status,
-        )
-
     li_config = None
     if request.linkedin:
         li_config = LinkedInConfig(
@@ -182,10 +176,10 @@ def run_agent1(request: RunAgentRequest, background_tasks: BackgroundTasks):
             author_urn=request.linkedin.author_urn,
         )
 
-    background_tasks.add_task(run_agent1_background, config, wp_config, li_config)
+    background_tasks.add_task(run_agent1_background, config, li_config)
     _append_log("info", "Agent 1 started by user", agent_id="agent1",
                 metadata={"provider": config.provider, "model": config.model})
-    return {"status": "started", "message": "Agent 1 (Content Writer & SEO) has started."}
+    return {"status": "started", "message": "Agent 1 (Hangout Social) has started."}
 
 
 @router.get("/agents/agent1/status", response_model=AgentRunStatus)
@@ -390,7 +384,7 @@ def run_agent2(request: RunAgentRequest, background_tasks: BackgroundTasks):
                     "outplay": outplay_config is not None,
                     "hubspot": hubspot_config is not None,
                 })
-    return {"status": "started", "message": "Agent 2 (Lead Qualification) has started."}
+    return {"status": "started", "message": "Agent 2 (Matters) has started."}
 
 
 @router.get("/agents/agent2/status", response_model=AgentRunStatus)
@@ -407,7 +401,11 @@ def list_leads():
 def download_leads(campaign: Optional[str] = None):
     """
     Download leads analysis as CSV.
-    ?campaign=A|B|C|notify_rupesh|all  (default: all)
+    ?campaign=A|B|nurture|disqualified|all  (default: all)
+      A           = Qualified Leads enrolled in Marktech Sequence A
+      B           = Personal Leads enrolled in Marktech Sequence B
+      nurture     = Nurture Leads flagged for manual review
+      disqualified = Disqualified Leads (no outreach)
     """
     all_leads = leads_db.read()
 
@@ -432,7 +430,9 @@ def download_leads(campaign: Optional[str] = None):
         row["concerns"] = "; ".join(lead.get("concerns") or [])
         writer.writerow(row)
 
-    suffix = f"-campaign-{campaign}" if campaign and campaign.lower() != "all" else ""
+    label_map = {"A": "qualified", "B": "personal", "nurture": "nurture", "disqualified": "disqualified"}
+    suffix_key = label_map.get(campaign, campaign) if campaign and campaign.lower() != "all" else ""
+    suffix = f"-{suffix_key}" if suffix_key else ""
     filename = f"leads-analysis{suffix}.csv"
     return Response(
         content=output.getvalue().encode("utf-8"),
@@ -469,13 +469,14 @@ def run_agent3(request: RunAgentRequest, background_tasks: BackgroundTasks):
     config = _model_to_config(request.llm_config)
     klenty_config = _build_klenty_config(request)
     outplay_config = _build_outplay_config(request)
+    hubspot_config = _build_hubspot_config(request)
     apollo_config = _build_apollo_config(request)
     sales_nav_config = _build_sales_navigator_config(request)
     phantombuster_config = _build_phantombuster_config(request)
 
     background_tasks.add_task(
-        run_agent3_background, config, klenty_config, outplay_config, apollo_config, sales_nav_config,
-        phantombuster_config
+        run_agent3_background, config, klenty_config, outplay_config, hubspot_config,
+        apollo_config, sales_nav_config, phantombuster_config
     )
     _append_log("info", "Agent 3 started by user", agent_id="agent3",
                 metadata={
@@ -483,11 +484,12 @@ def run_agent3(request: RunAgentRequest, background_tasks: BackgroundTasks):
                     "model": config.model,
                     "klenty": klenty_config is not None,
                     "outplay": outplay_config is not None,
+                    "hubspot": hubspot_config is not None,
                     "apollo": apollo_config is not None,
                     "sales_navigator": sales_nav_config is not None,
                     "phantombuster": phantombuster_config is not None,
                 })
-    return {"status": "started", "message": "Agent 3 (LinkedIn Outbound Automation) has started."}
+    return {"status": "started", "message": "Agent 3 (Matters broad) has started."}
 
 
 @router.get("/agents/agent3/status", response_model=AgentRunStatus)
@@ -526,7 +528,7 @@ def run_agent4(request: RunAgentRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_agent4_background, config)
     _append_log("info", "Agent 4 started by user", agent_id="agent4",
                 metadata={"provider": config.provider, "model": config.model})
-    return {"status": "started", "message": "Agent 4 (Analytics & Reports) has started."}
+    return {"status": "started", "message": "Agent 4 (Ringside View) has started."}
 
 
 @router.get("/agents/agent4/status", response_model=AgentRunStatus)
@@ -555,8 +557,8 @@ def list_agents():
     return [
         {
             "id": "agent2",
-            "name": "Lead Qualification",
-            "description": "Deduplicates leads, scrapes company websites, AI-scores for travel industry fit, seeds blog topics to Agent 1, and auto-enrolls into Klenty/Outplay campaigns.",
+            "name": "Matters",
+            "description": "Deduplicates leads, scrapes company websites, AI-scores for travel industry fit, seeds blog topics to Hangout Social, and auto-enrolls into Klenty/Outplay campaigns.",
             "type": "Lead Automation",
             "schedule": "Hourly",
             "status": a2.status,
@@ -566,8 +568,8 @@ def list_agents():
         },
         {
             "id": "agent3",
-            "name": "LinkedIn Outbound",
-            "description": "Reads Agent 2 hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved prospects.",
+            "name": "Matters broad",
+            "description": "Reads Matters hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved prospects.",
             "type": "Outreach Automation",
             "schedule": "6x Daily",
             "status": a3.status,
@@ -577,7 +579,7 @@ def list_agents():
         },
         {
             "id": "agent4",
-            "name": "Analytics & Reports",
+            "name": "Ringside View",
             "description": "Aggregates data from all agents, generates AI-powered performance insights, and creates executive reports with visualizations.",
             "type": "Reporting",
             "schedule": "Weekly",
@@ -588,12 +590,12 @@ def list_agents():
         },
         {
             "id": "agent1",
-            "name": "Content Writer & SEO",
-            "description": "Picks pending topics (seeded by Agent 2 or added manually), generates SEO-optimized blogs, runs quality checks, creates LinkedIn posts, and publishes to WordPress.",
+            "name": "Hangout Social",
+            "description": "Picks pending topics (seeded by Matters or added manually), writes an Ogilvy-style LinkedIn post, generates a DALL-E illustration, and publishes text + image directly to LinkedIn.",
             "type": "Content Automation",
             "schedule": "Daily",
             "status": a1.status,
-            "steps_count": 8,
+            "steps_count": 6,
             "last_run": a1.completed_at,
             "implemented": True,
         },
@@ -673,10 +675,29 @@ def test_publish_linkedin(config: LinkedInConfigModel):
         access_token=config.access_token,
         author_urn=config.author_urn,
     )
+    post_text = "This is a test post from Inbound 360! If you see this, the LinkedIn integration is working correctly. You can safely delete this post."
+    try:
+        return post_to_linkedin(li_config, post_text)
+    except IntegrationError as e:
+        return {"post_urn": None, "message": str(e)}
 
-    post_text = "This is a test post from Marketing AI! If you see this, the LinkedIn integration is working correctly. You can safely delete this post."
 
-    return post_to_linkedin(li_config, post_text)
+@router.post("/integrations/test-publish/linkedin-image")
+def test_publish_linkedin_image(config: LinkedInImageTestModel):
+    """Test publishing an image + text post to LinkedIn via the Assets upload API."""
+    li_config = LinkedInConfig(
+        access_token=config.access_token,
+        author_urn=config.author_urn,
+    )
+    post_text = (
+        config.post_text
+        or "🎯 Testing LinkedIn image post from Inbound 360! "
+           "If you see this with an image attached, the integration is working. You can safely delete this post."
+    )
+    try:
+        return post_to_linkedin(li_config, post_text, image_url=config.image_url)
+    except IntegrationError as e:
+        return {"post_urn": None, "message": str(e)}
 
 
 @router.post("/integrations/test/klenty")
@@ -696,12 +717,38 @@ def test_klenty(config: KlentyConfigModel):
 def test_outplay(config: OutplayConfigModel):
     """Test Outplay API connection."""
     outplay_config = OutplayConfig(
-        api_key=config.api_key,
-        sequence_name_a=config.sequence_name_a,
-        sequence_name_b=config.sequence_name_b,
-        sequence_name_c=config.sequence_name_c,
+        client_secret=config.client_secret,
+        client_id=config.client_id,
+        user_id=config.user_id,
+        location=config.location,
+        sequence_id_a=config.sequence_id_a,   # Qualified Lead Marktech
+        sequence_id_b=config.sequence_id_b,   # Personal Lead Marktech
     )
     return test_outplay_connection(outplay_config)
+
+
+@router.post("/integrations/test/outplay-prospect")
+def test_outplay_prospect(config: OutplayConfigModel):
+    """Send a dummy prospect to Outplay to verify end-to-end enrollment."""
+    outplay_config = OutplayConfig(
+        client_secret=config.client_secret,
+        client_id=config.client_id,
+        user_id=config.user_id,
+        location=config.location,
+        sequence_id_a=config.sequence_id_a,   # Qualified Lead Marktech
+        sequence_id_b=config.sequence_id_b,   # Personal Lead Marktech
+    )
+    try:
+        result = add_prospect_to_outplay(
+            outplay_config,
+            email="test.vervotech@outplay-test.com",
+            name="Test Vervotech",
+            company="Vervotech Test Account",
+            sequence_id=outplay_config.sequence_id_a,
+        )
+        return {"success": True, **result}
+    except IntegrationError as e:
+        return {"success": False, "message": str(e)}
 
 
 @router.post("/integrations/test/apollo")
@@ -730,8 +777,29 @@ def test_hubspot(config: HubSpotConfigModel):
     hs_config = HubSpotConfig(
         access_token=config.access_token,
         max_contacts=config.max_contacts,
+        list_id=config.list_id or "",
     )
     return test_hubspot_connection(hs_config)
+
+
+@router.post("/integrations/test/hubspot-prospect")
+def test_hubspot_prospect(config: HubSpotConfigModel):
+    """Send a dummy prospect to HubSpot: creates contact, sets lead status, adds to list."""
+    hs_config = HubSpotConfig(
+        access_token=config.access_token,
+        max_contacts=config.max_contacts,
+        list_id=config.list_id or "",
+    )
+    try:
+        result = enroll_in_hubspot_sequence(
+            hs_config,
+            email="prathamesh.shirtawle@gmail.com",
+            name="Test Vervotech",
+            company="Vervotech Test Account",
+        )
+        return {"success": True, **result}
+    except IntegrationError as e:
+        return {"success": False, "message": str(e)}
 
 
 @router.post("/integrations/test/phantombuster")

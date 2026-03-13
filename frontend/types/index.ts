@@ -29,10 +29,12 @@ export interface KlentyConfig {
 }
 
 export interface OutplayConfig {
-  apiKey: string;
-  sequenceNameA: string;
-  sequenceNameB: string;
-  sequenceNameC: string;
+  clientSecret: string;  // X-CLIENT-SECRET header
+  clientId: string;      // ?client_id= query param
+  userId: string;        // Outplay user ID (required for sequence enrollment)
+  location: string;      // Regional server, e.g. "us4"
+  sequenceIdA: string;   // Numeric sequence ID — Qualified Lead Marktech (score > 70)
+  sequenceIdB: string;   // Numeric sequence ID — Personal Lead Marktech (Gmail/Yahoo/etc.)
 }
 
 export interface ApolloConfig {
@@ -48,6 +50,7 @@ export interface SalesNavigatorConfig {
 export interface HubSpotConfig {
   accessToken: string;
   maxContacts: number;
+  listId: string;  // Number from objectLists/N in HubSpot URL (e.g. 9)
 }
 
 export interface PhantomBusterConfig {
@@ -145,7 +148,7 @@ export interface LeadRecord {
   website?: string;
   name?: string;
   company?: string;
-  category?: 'Hot' | 'Warm' | 'Cold';
+  category?: 'Qualified' | 'Nurture' | 'Personal' | 'Disqualified';
   analysis_status?: 'completed' | 'skipped' | 'failed';
   campaign?: string;
   campaign_label?: string;
@@ -161,6 +164,9 @@ export interface LeadRecord {
   outplay_enrolled?: boolean;
   outplay_enrolled_run_id?: string;
   outplay_enrolled_at?: string;
+  hubspot_list_added?: boolean;
+  hubspot_list_added_run_id?: string;
+  hubspot_list_added_at?: string;
   processed_run_id?: string;
   processed_at?: string;
   created_at?: string;
@@ -197,12 +203,13 @@ export interface ReportRecord {
   status: 'draft' | 'complete';
   funnel_summary?: {
     total_leads: number;
-    hot_leads: number;
-    warm_leads: number;
-    cold_leads: number;
-    fit_clients: number;
+    qualified_leads: number;
+    nurture_leads: number;
+    personal_leads: number;
+    disqualified_leads: number;
+    sequence_a_enrolled: number;
+    sequence_b_enrolled: number;
     outreach_targets: number;
-    klenty_enrolled: number;
     blogs_published: number;
     conversion_rate_pct: number;
   };

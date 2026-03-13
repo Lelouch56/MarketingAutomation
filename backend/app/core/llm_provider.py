@@ -24,12 +24,47 @@ class LLMConfig:
 
 
 def _clean_json_response(raw: str) -> str:
-    """Strip markdown code fences that some LLMs add around JSON responses."""
+    """Strip markdown code fences and fix common LLM JSON formatting issues."""
     raw = raw.strip()
     # Remove ```json ... ``` or ``` ... ```
     raw = re.sub(r'^```(?:json)?\s*', '', raw)
     raw = re.sub(r'\s*```$', '', raw)
-    return raw.strip()
+    raw = raw.strip()
+
+    # Fix literal newlines inside JSON string values.
+    # Some LLMs put actual \n characters inside "..." which makes JSON invalid.
+    # Strategy: replace newlines that appear inside a JSON string value with \\n.
+    def _escape_newlines_in_strings(s: str) -> str:
+        result = []
+        in_string = False
+        i = 0
+        while i < len(s):
+            ch = s[i]
+            if ch == '\\' and in_string:
+                # Keep escape sequence as-is
+                result.append(ch)
+                i += 1
+                if i < len(s):
+                    result.append(s[i])
+                    i += 1
+                continue
+            if ch == '"':
+                in_string = not in_string
+                result.append(ch)
+            elif ch in ('\n', '\r') and in_string:
+                result.append('\\n')
+            else:
+                result.append(ch)
+            i += 1
+        return ''.join(result)
+
+    try:
+        import json as _json
+        _json.loads(raw)  # Already valid — skip fixup
+    except Exception:
+        raw = _escape_newlines_in_strings(raw)
+
+    return raw
 
 
 def _is_rate_limit_error(e: Exception) -> bool:
@@ -202,6 +237,76 @@ def call_llm(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
         return _call_groq(config, system_prompt, user_prompt)
     else:
         raise LLMError(f"Unknown provider: {config.provider}. Use 'openai', 'gemini', 'anthropic', 'grok', or 'groq'.")
+
+
+def generate_image_openai(api_key: str, prompt: str, size: str = "1024x1024") -> str:
+    """
+    Generate an image with DALL-E 3. Returns the temporary image URL.
+    Only works when the LLM provider is OpenAI.
+    Raises LLMError on failure.
+    """
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size=size,
+            quality="standard",
+            n=1,
+        )
+        return response.data[0].url
+    except Exception as e:
+        raise LLMError(f"DALL-E image generation error: {e}") from e
+
+
+def generate_image_gemini(api_key: str, prompt: str) -> str:
+    """
+    Generate an image with Gemini (gemini-2.0-flash-exp-image-generation).
+    Returns a data URI string: "data:image/png;base64,<b64data>"
+    Raises LLMError on failure.
+    """
+    try:
+        import base64
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp-image-generation",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["image", "text"],
+            ),
+        )
+        for part in response.candidates[0].content.parts:
+            if part.inline_data is not None:
+                mime_type = part.inline_data.mime_type or "image/png"
+                b64 = base64.b64encode(part.inline_data.data).decode("utf-8")
+                return f"data:{mime_type};base64,{b64}"
+        raise LLMError("Gemini image generation returned no image data.")
+    except LLMError:
+        raise
+    except Exception as e:
+        raise LLMError(f"Gemini image generation error: {e}") from e
+
+
+def generate_image(config: LLMConfig, prompt: str) -> str:
+    """
+    Generate an image using the configured LLM provider.
+    - OpenAI → DALL-E 3, returns a temporary URL
+    - Gemini → gemini-2.0-flash-exp-image-generation, returns a data URI
+    Raises LLMError if provider does not support image generation or on failure.
+    """
+    provider = config.provider.lower()
+    if provider == "openai":
+        return generate_image_openai(config.api_key, prompt)
+    elif provider == "gemini":
+        return generate_image_gemini(config.api_key, prompt)
+    else:
+        raise LLMError(
+            f"Image generation is not supported for provider '{config.provider}'. "
+            "Use 'openai' (DALL-E 3) or 'gemini' (Gemini Flash image generation)."
+        )
 
 
 def call_llm_json(config: LLMConfig, system_prompt: str, user_prompt: str) -> dict:

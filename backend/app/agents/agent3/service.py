@@ -11,7 +11,7 @@ Agent 3: LinkedIn Outbound Automation
   4. analyze_outreach_fit   - AI scores each prospect using Agent 2 company context; adds
                               outreach_score, outreach_reason, connection_message per prospect
   5. queue_for_approval     - Persist to outreach_targets.json as 'pending_approval'
-  6. email_outreach         - Enroll approved prospects in Klenty / Outplay
+  6. email_outreach         - Enroll approved prospects in Klenty / Outplay / HubSpot Sequences
   7. linkedin_connection    - PhantomBuster Connection Sender (if configured) or log requests
   8. track_engagement       - Aggregate run metrics
 """
@@ -37,6 +37,7 @@ from app.core.prompts import (
 from app.core.integrations import (
     KlentyConfig, IntegrationError, add_prospect_to_klenty,
     OutplayConfig, add_prospect_to_outplay,
+    HubSpotConfig, enroll_in_hubspot_sequence,
     ApolloConfig, search_apollo_prospects, search_apollo_by_domains, _extract_domain,
     SalesNavigatorConfig, search_sales_navigator_prospects,
     PhantomBusterConfig, search_phantombuster_prospects, launch_linkedin_connections,
@@ -437,14 +438,16 @@ def _step6_email_outreach(
     run_id: str,
     klenty_config: Optional[KlentyConfig],
     outplay_config: Optional[OutplayConfig] = None,
+    hubspot_config: Optional[HubSpotConfig] = None,
 ) -> tuple:
     """
-    Enroll 'approved' prospects in Klenty and/or Outplay email sequences.
-    Returns (klenty_enrolled, outplay_enrolled, skipped_count).
+    Enroll 'approved' prospects in Klenty, Outplay, and/or HubSpot Sequences.
+    Returns (klenty_enrolled, outplay_enrolled, hubspot_enrolled, skipped_count).
     """
     targets = outreach_db.read()
     klenty_enrolled = 0
     outplay_enrolled = 0
+    hubspot_enrolled = 0
     skipped = 0
     updated = False
 
@@ -488,7 +491,7 @@ def _step6_email_outreach(
                     email=t.get("email", ""),
                     name=name or None,
                     company=t.get("company"),
-                    sequence_name=outplay_config.sequence_name_a,
+                    sequence_id=outplay_config.sequence_id_a,
                 )
                 t["outplay_enrolled"] = True
                 t["outplay_enrolled_at"] = _now()
@@ -505,13 +508,36 @@ def _step6_email_outreach(
             t["outplay_status"] = "queued_no_config"
             updated = True
 
-        if not klenty_config and not outplay_config:
+        if hubspot_config and not t.get("hubspot_enrolled"):
+            try:
+                enroll_in_hubspot_sequence(
+                    hubspot_config,
+                    email=t.get("email", ""),
+                    name=name or None,
+                    company=t.get("company"),
+                )
+                t["hubspot_enrolled"] = True
+                t["hubspot_enrolled_at"] = _now()
+                hubspot_enrolled += 1
+                updated = True
+            except IntegrationError:
+                t["hubspot_enrolled"] = False
+                updated = True
+            except Exception as e:
+                logger.error("Unexpected error enrolling %s in HubSpot: %s", t.get("email"), str(e)[:100])
+                t["hubspot_enrolled"] = False
+                updated = True
+        elif not hubspot_config and not t.get("hubspot_enrolled"):
+            t["hubspot_status"] = "queued_no_config"
+            updated = True
+
+        if not klenty_config and not outplay_config and not hubspot_config:
             skipped += 1
 
     if updated:
         outreach_db.write(targets)
 
-    return klenty_enrolled, outplay_enrolled, skipped
+    return klenty_enrolled, outplay_enrolled, hubspot_enrolled, skipped
 
 
 def _step7_linkedin_connection(
@@ -573,6 +599,7 @@ def _step8_track_engagement(run_id: str) -> dict:
         "approved": sum(1 for t in run_targets if t.get("status") == "approved"),
         "klenty_enrolled": sum(1 for t in run_targets if t.get("klenty_enrolled")),
         "outplay_enrolled": sum(1 for t in run_targets if t.get("outplay_enrolled")),
+        "hubspot_enrolled": sum(1 for t in run_targets if t.get("hubspot_enrolled")),
         "linkedin_connection_sent": sum(
             1 for t in run_targets
             if t.get("linkedin_status") in ("connection_requested", "sent_via_phantombuster")
@@ -589,6 +616,7 @@ def run_agent3_background(
     llm_config: LLMConfig,
     klenty_config: Optional[KlentyConfig] = None,
     outplay_config: Optional[OutplayConfig] = None,
+    hubspot_config: Optional[HubSpotConfig] = None,
     apollo_config: Optional[ApolloConfig] = None,
     sales_nav_config: Optional[SalesNavigatorConfig] = None,
     phantombuster_config: Optional[PhantomBusterConfig] = None,
@@ -708,26 +736,32 @@ def run_agent3_background(
             f"{added_count} prospects saved — approve them in Agent 3 detail page to start outreach"
         )
 
-        # ── Step 6: Email outreach via Klenty / Outplay ───────────────────
+        # ── Step 6: Email outreach via Klenty / Outplay / HubSpot ────────
         platforms = []
         if klenty_config:
             platforms.append("Klenty")
         if outplay_config:
             platforms.append("Outplay")
+        if hubspot_config:
+            platforms.append("HubSpot")
         platform_note = f"via {' & '.join(platforms)}" if platforms else "(no platform configured — queuing)"
         _update_step(6, "running", f"Starting email outreach {platform_note}...")
-        klenty_cnt, outplay_cnt, skipped = _step6_email_outreach(run_id, klenty_config, outplay_config)
+        klenty_cnt, outplay_cnt, hubspot_cnt, skipped = _step6_email_outreach(
+            run_id, klenty_config, outplay_config, hubspot_config
+        )
         enroll_parts = []
         if klenty_config:
             enroll_parts.append(f"{klenty_cnt} enrolled in Klenty")
         if outplay_config:
             enroll_parts.append(f"{outplay_cnt} enrolled in Outplay")
+        if hubspot_config:
+            enroll_parts.append(f"{hubspot_cnt} enrolled in HubSpot")
         if enroll_parts:
             _update_step(6, "completed", f"{', '.join(enroll_parts)}, {skipped} pending approval")
         else:
             _update_step(
                 6, "completed",
-                f"{skipped} queued — connect Klenty or Outplay in Settings to enable auto-enrollment"
+                f"{skipped} queued — connect Klenty, Outplay, or HubSpot in Settings to enable auto-enrollment"
             )
 
         # ── Step 7: LinkedIn connection requests ──────────────────────────
@@ -748,7 +782,9 @@ def run_agent3_background(
         # ── Step 8: Track engagement ──────────────────────────────────────
         _update_step(8, "running", "Aggregating engagement metrics...")
         summary = _step8_track_engagement(run_id)
-        enrolled_total = summary["klenty_enrolled"] + summary["outplay_enrolled"]
+        enrolled_total = (
+            summary["klenty_enrolled"] + summary["outplay_enrolled"] + summary["hubspot_enrolled"]
+        )
         score_note = (
             f", avg outreach score: {summary['avg_outreach_score']}/100"
             if summary.get("avg_outreach_score") is not None else ""
@@ -767,6 +803,7 @@ def run_agent3_background(
             "pending_approval": summary["pending_approval"],
             "klenty_enrolled": summary["klenty_enrolled"],
             "outplay_enrolled": summary["outplay_enrolled"],
+            "hubspot_enrolled": summary["hubspot_enrolled"],
             "linkedin_connections": summary["linkedin_connection_sent"],
             "avg_outreach_score": summary["avg_outreach_score"],
         })

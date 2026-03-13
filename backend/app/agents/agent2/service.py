@@ -1,15 +1,21 @@
 """
-Agent 2: Lead Data Collection & Email Automation
+Agent 2: Lead Qualification & Email Automation
 
 8-step workflow:
-  1. load_leads        - Load all leads from leads.json
+  1. load_leads        - Load all leads from leads.json (+ optional HubSpot fetch)
   2. deduplicate       - Remove duplicate emails (keep last)
-  3. categorize        - Rule-based: Cold / Warm / Hot
-  4. scrape_websites   - Scrape homepage text for Hot leads
-  5. analyze_leads     - LLM scores Hot leads for travel industry fit
-  6. assign_campaigns  - Assign to Campaign A/B/C or flag for Rupesh
+  3. categorize        - Rule-based: Qualified / Nurture / Personal / Disqualified
+  4. scrape_websites   - Scrape homepage text for Qualified leads
+  5. analyze_leads     - LLM scores Qualified leads for ICP fit (Email/Website/ICP/Size/Engagement)
+  6. assign_campaigns  - Qualified→Sequence A (score>70), Personal→Sequence B, Nurture→manual review
   7. extract_topics    - Seed relevant blog topics to Agent 1 from scraped content
   8. save_results      - Write updated leads back to leads.json
+
+Lead categories (rule-based, Step 3):
+  Qualified    - Business email + website exists → AI-scored in Step 5
+  Nurture      - Business email but no website, OR Qualified with AI score ≤ 70 → Need Manual Attention
+  Personal     - Free/consumer email (Gmail, Yahoo, Outlook, etc.) → Sequence B
+  Disqualified - Fake/test/spam email or invalid domain → No outreach
 """
 
 import logging
@@ -33,7 +39,7 @@ from app.core.prompts import (
 from app.core.integrations import (
     KlentyConfig, IntegrationError, add_prospect_to_klenty,
     OutplayConfig, add_prospect_to_outplay,
-    HubSpotConfig, fetch_hubspot_contacts,
+    HubSpotConfig, fetch_hubspot_contacts, add_contacts_to_hubspot_list,
 )
 from app.models import AgentRunStatus, StepStatus
 
@@ -48,7 +54,7 @@ topics_db = JsonDB("app/data/topics.json")   # shared with Agent 1 — seeds Pen
 # Classification constants
 # ─────────────────────────────────────────────────────────────
 
-COLD_LOCAL_KEYWORDS = {
+DISQUALIFIED_LOCAL_KEYWORDS = {
     "test", "dummy", "example", "fake", "temp", "temporary",
     "noreply", "no-reply", "donotreply", "do-not-reply",
     "admin", "postmaster", "spam", "null", "void",
@@ -214,29 +220,36 @@ def _step2_deduplicate(leads: list) -> list:
 
 
 def _classify_lead(email: str, website: str) -> str:
-    """Rule-based classification: Cold / Warm / Hot."""
+    """
+    Rule-based classification: Qualified / Nurture / Personal / Disqualified.
+
+    Qualified    — business email + website present (AI will score ICP fit in Step 5)
+    Nurture      — business email but no website (unclear company info, needs manual review)
+    Personal     — free/consumer email domain (Gmail, Yahoo, Outlook, etc.)
+    Disqualified — fake, test, or spam-style email address
+    """
     if not email:
-        return "Cold"
+        return "Disqualified"
 
     local = email.split("@")[0].lower()
     domain = email.split("@")[-1].lower() if "@" in email else ""
     has_website = bool(website and website.strip())
 
-    # Cold: suspicious local part keywords
-    if any(kw in local for kw in COLD_LOCAL_KEYWORDS):
-        return "Cold"
+    # Disqualified: suspicious/test local part
+    if any(kw in local for kw in DISQUALIFIED_LOCAL_KEYWORDS):
+        return "Disqualified"
 
-    # Cold: free domain with no website
+    # Personal: free/consumer email domain (Gmail, Yahoo, Outlook, etc.)
     is_free = domain in FREE_EMAIL_DOMAINS
-    if is_free and not has_website:
-        return "Cold"
+    if is_free:
+        return "Personal"
 
-    # Hot: business email with website
-    if not is_free and has_website:
-        return "Hot"
+    # Qualified: business email + website present (AI will score ICP fit in Step 5)
+    if has_website:
+        return "Qualified"
 
-    # Warm: everything else
-    return "Warm"
+    # Nurture: business email but no website — unclear company info, needs manual review
+    return "Nurture"
 
 
 def _step3_categorize(leads: list) -> list:
@@ -311,13 +324,13 @@ def _step4_scrape_websites(leads: list) -> dict:
     Returns {email: scraped_text} dict.
     """
     website_texts = {}
-    new_hot_leads = [
+    new_qualified_leads = [
         l for l in leads
-        if l.get("category") == "Hot"
+        if l.get("category") == "Qualified"
         and l.get("website")
         and l.get("analysis_status") != "completed"
     ]
-    for lead in new_hot_leads:
+    for lead in new_qualified_leads:
         text = _scrape_website(lead["website"])
         website_texts[lead["email"].lower()] = text
     return website_texts
@@ -329,13 +342,21 @@ def _step5_analyze_leads(leads: list, website_texts: dict, config: LLMConfig) ->
     Skips leads already marked analysis_status='completed' — preserves existing scores.
     """
     for lead in leads:
-        if lead.get("category") != "Hot":
-            # Non-Hot leads are not scored — mark explicitly and set blank defaults
+        if lead.get("category") != "Qualified":
+            # Only Qualified leads are AI-scored — all others are skipped
             lead["analysis_status"] = "skipped"
             lead.setdefault("score", None)
             lead.setdefault("industry_fit", None)
             lead.setdefault("company_type", None)
-            lead.setdefault("reasoning", "Not analysed — lead is not Hot category")
+            cat = lead.get("category", "Unknown")
+            if cat == "Personal":
+                lead.setdefault("reasoning", "Not analysed — Personal email lead, enrolled in Personal Marktech Sequence")
+            elif cat == "Nurture":
+                lead.setdefault("reasoning", "Not analysed — no company website, flagged for manual review")
+            elif cat == "Disqualified":
+                lead.setdefault("reasoning", "Not analysed — disqualified (fake/test email)")
+            else:
+                lead.setdefault("reasoning", f"Not analysed — category: {cat}")
             lead.setdefault("signals", [])
             lead.setdefault("concerns", [])
             continue
@@ -375,42 +396,55 @@ def _step6_assign_campaigns(
     run_id: str,
     klenty_config: Optional[KlentyConfig] = None,
     outplay_config: Optional[OutplayConfig] = None,
+    hubspot_config: Optional[HubSpotConfig] = None,
 ) -> tuple:
     """
     Assign each lead to a campaign based on category and AI score.
     If klenty_config or outplay_config is provided, auto-enroll leads.
+    If hubspot_config is provided (with list_id), batch-add qualified (Campaign A)
+    HubSpot-sourced contacts to the configured Static list.
     Tags each enrolled lead with the run_id so enrollments can be traced per run.
-    Returns (updated_leads, klenty_enrolled_count, outplay_enrolled_count).
+    Returns (updated_leads, klenty_enrolled_count, outplay_enrolled_count, hubspot_list_added).
     """
     now = _now()
     klenty_enrolled = 0
     outplay_enrolled = 0
 
     for lead in leads:
-        category = lead.get("category", "Cold")
+        category = lead.get("category", "Disqualified")
         score = lead.get("score", 0)
 
-        if category == "Hot":
+        if category == "Qualified":
             if score > 70:
+                # High-quality ICP match — enroll in Qualified Lead Marktech sequence
                 lead["campaign"] = "A"
-                lead["campaign_label"] = "Fit Client — Campaign A"
+                lead["campaign_label"] = "Qualified Lead — Marktech Sequence"
                 klenty_campaign = klenty_config.campaign_a_name if klenty_config else "Campaign A"
-                outplay_sequence = outplay_config.sequence_name_a if outplay_config else "Travel Fit Sequence"
+                outplay_sequence = outplay_config.sequence_id_a if outplay_config else ""
             else:
-                lead["campaign"] = "notify_rupesh"
-                lead["campaign_label"] = "Not Fit — Notify Rupesh"
+                # Business email + website but AI scored below ICP threshold → manual review
+                lead["campaign"] = "nurture"
+                lead["campaign_label"] = "Need Manual Attention"
                 klenty_campaign = None
                 outplay_sequence = None
-        elif category == "Warm":
+        elif category == "Nurture":
+            # Business email but no website — unclear company info
+            lead["campaign"] = "nurture"
+            lead["campaign_label"] = "Need Manual Attention"
+            klenty_campaign = None
+            outplay_sequence = None
+        elif category == "Personal":
+            # Free/consumer email — enroll in Personal Lead Marktech sequence
             lead["campaign"] = "B"
-            lead["campaign_label"] = "Warm Lead — Campaign B"
+            lead["campaign_label"] = "Personal Lead — Marktech Sequence"
             klenty_campaign = klenty_config.campaign_b_name if klenty_config else "Campaign B"
-            outplay_sequence = outplay_config.sequence_name_b if outplay_config else "Warm Lead Sequence"
+            outplay_sequence = outplay_config.sequence_id_b if outplay_config else ""
         else:
-            lead["campaign"] = "C"
-            lead["campaign_label"] = "Cold Lead — Campaign C"
-            klenty_campaign = klenty_config.campaign_c_name if klenty_config else "Campaign C"
-            outplay_sequence = outplay_config.sequence_name_c if outplay_config else "Cold Lead Sequence"
+            # Disqualified — fake/test email, no outreach
+            lead["campaign"] = "disqualified"
+            lead["campaign_label"] = "Disqualified — No Outreach"
+            klenty_campaign = None
+            outplay_sequence = None
 
         lead["processed_at"] = now
         lead["processed_run_id"] = run_id
@@ -445,7 +479,7 @@ def _step6_assign_campaigns(
                     email=lead.get("email", ""),
                     name=lead.get("name"),
                     company=lead.get("company"),
-                    sequence_name=outplay_sequence,
+                    sequence_id=outplay_sequence,
                 )
                 lead["outplay_enrolled"] = True
                 lead["outplay_enrolled_run_id"] = run_id
@@ -457,7 +491,40 @@ def _step6_assign_campaigns(
                 logger.error("Unexpected error enrolling %s in Outplay: %s", lead.get("email"), str(e)[:100])
                 lead["outplay_enrolled"] = False
 
-    return leads, klenty_enrolled, outplay_enrolled
+    # ── Batch-add ALL qualified (Campaign A) leads to HubSpot Static list ──
+    # Uses email-based matching — works for leads from any source (HubSpot, CSV, manual).
+    # Contacts not found in HubSpot go to invalidEmails (non-fatal, just not added).
+    hubspot_list_added = 0
+    if hubspot_config and hubspot_config.list_id:
+        campaign_a_leads = [
+            lead for lead in leads
+            if lead.get("campaign") == "A" and lead.get("email")
+        ]
+        campaign_a_emails = [lead["email"] for lead in campaign_a_leads]
+        if campaign_a_emails:
+            try:
+                result = add_contacts_to_hubspot_list(hubspot_config, campaign_a_emails)
+                hubspot_list_added = result.get("added", 0)
+                invalid_emails = result.get("invalid_emails", set())
+                if result.get("invalid", 0):
+                    logger.warning(
+                        "HubSpot list add: %d emails not found in HubSpot CRM (skipped)",
+                        result["invalid"],
+                    )
+                # Mark each lead individually so the UI can show per-row status
+                for lead in campaign_a_leads:
+                    if (lead["email"] or "").lower() not in invalid_emails:
+                        lead["hubspot_list_added"] = True
+                        lead["hubspot_list_added_run_id"] = run_id
+                        lead["hubspot_list_added_at"] = now
+                    else:
+                        lead.setdefault("hubspot_list_added", False)
+            except IntegrationError as e:
+                logger.warning("HubSpot list batch add failed: %s", str(e)[:200])
+            except Exception as e:
+                logger.error("Unexpected error adding leads to HubSpot list: %s", str(e)[:100])
+
+    return leads, klenty_enrolled, outplay_enrolled, hubspot_list_added
 
 
 def _step7_extract_topics(leads: list, website_texts: dict, llm_config: LLMConfig) -> dict:
@@ -581,33 +648,34 @@ def run_agent2_background(
         _update_step(2, "completed", f"Removed {removed} duplicates. {len(leads)} unique leads")
 
         # ── Step 3: Categorize ──────────────────────────────────────────
-        _update_step(3, "running", "Categorizing leads (Hot/Warm/Cold)...")
+        _update_step(3, "running", "Categorizing leads (Qualified / Nurture / Personal / Disqualified)...")
         leads = _step3_categorize(leads)
-        hot = sum(1 for l in leads if l.get("category") == "Hot")
-        warm = sum(1 for l in leads if l.get("category") == "Warm")
-        cold = sum(1 for l in leads if l.get("category") == "Cold")
-        _update_step(3, "completed", f"Hot: {hot}, Warm: {warm}, Cold: {cold}")
+        qualified = sum(1 for l in leads if l.get("category") == "Qualified")
+        nurture = sum(1 for l in leads if l.get("category") == "Nurture")
+        personal = sum(1 for l in leads if l.get("category") == "Personal")
+        disqualified = sum(1 for l in leads if l.get("category") == "Disqualified")
+        _update_step(3, "completed", f"Qualified: {qualified}, Nurture: {nurture}, Personal: {personal}, Disqualified: {disqualified}")
 
         # ── Step 4: Scrape websites ─────────────────────────────────────
-        already_analyzed = sum(1 for l in leads if l.get("category") == "Hot" and l.get("analysis_status") == "completed")
-        new_hot = hot - already_analyzed
+        already_analyzed = sum(1 for l in leads if l.get("category") == "Qualified" and l.get("analysis_status") == "completed")
+        new_qualified = qualified - already_analyzed
         skip_note = f" ({already_analyzed} already analysed, skipped)" if already_analyzed else ""
-        _update_step(4, "running", f"Scraping websites for {new_hot} new Hot leads{skip_note}...")
+        _update_step(4, "running", f"Scraping websites for {new_qualified} new Qualified leads{skip_note}...")
         website_texts = _step4_scrape_websites(leads)
         scraped = sum(1 for v in website_texts.values() if v)
-        _update_step(4, "completed", f"Scraped {scraped}/{new_hot} new websites{skip_note}")
+        _update_step(4, "completed", f"Scraped {scraped}/{new_qualified} Qualified lead websites{skip_note}")
 
         # ── Step 5: Analyze leads (AI) ──────────────────────────────────
-        if new_hot > 0:
-            _update_step(5, "running", f"AI-scoring {new_hot} new Hot leads{skip_note}...")
+        if new_qualified > 0:
+            _update_step(5, "running", f"AI-scoring {new_qualified} new Qualified leads for ICP fit{skip_note}...")
             leads = _step5_analyze_leads(leads, website_texts, llm_config)
             fit = sum(1 for l in leads if l.get("industry_fit"))
-            _update_step(5, "completed", f"{fit}/{new_hot} new Hot leads are travel industry fit{skip_note}")
-        elif hot > 0:
+            _update_step(5, "completed", f"{fit}/{new_qualified} Qualified leads match ICP criteria (score > 70){skip_note}")
+        elif qualified > 0:
             leads = _step5_analyze_leads(leads, website_texts, llm_config)
-            _update_step(5, "skipped", f"All {hot} Hot leads already analysed — skipped")
+            _update_step(5, "skipped", f"All {qualified} Qualified leads already analysed — skipped")
         else:
-            _update_step(5, "skipped", "No Hot leads to analyze")
+            _update_step(5, "skipped", "No Qualified leads to analyze")
 
         # ── Step 6: Assign campaigns ────────────────────────────────────
         enroll_platforms = []
@@ -615,17 +683,26 @@ def run_agent2_background(
             enroll_platforms.append("Klenty")
         if outplay_config:
             enroll_platforms.append("Outplay")
+        if hubspot_config and hubspot_config.list_id:
+            enroll_platforms.append(f"HubSpot list {hubspot_config.list_id}")
         enroll_note = f" + {' & '.join(enroll_platforms)} enroll" if enroll_platforms else ""
-        _update_step(6, "running", f"Assigning leads to campaigns{enroll_note}...")
-        leads, klenty_enrolled, outplay_enrolled = _step6_assign_campaigns(leads, run_id, klenty_config, outplay_config)
-        fit_clients = sum(1 for l in leads if l.get("campaign") == "A")
+        _update_step(6, "running", f"Enrolling leads — Qualified→Sequence A, Personal→Sequence B, Nurture→manual review{enroll_note}...")
+        leads, klenty_enrolled, outplay_enrolled, hubspot_list_added = _step6_assign_campaigns(
+            leads, run_id, klenty_config, outplay_config, hubspot_config
+        )
+        seq_a_count = sum(1 for l in leads if l.get("campaign") == "A")
+        seq_b_count = sum(1 for l in leads if l.get("campaign") == "B")
+        nurture_count = sum(1 for l in leads if l.get("campaign") == "nurture")
+        disqualified_count = sum(1 for l in leads if l.get("campaign") == "disqualified")
         enroll_parts = []
         if klenty_config:
             enroll_parts.append(f"{klenty_enrolled} enrolled in Klenty")
         if outplay_config:
             enroll_parts.append(f"{outplay_enrolled} enrolled in Outplay")
+        if hubspot_config and hubspot_config.list_id:
+            enroll_parts.append(f"{hubspot_list_added} added to HubSpot list {hubspot_config.list_id}")
         enroll_msg = ", " + ", ".join(enroll_parts) if enroll_parts else ""
-        _update_step(6, "completed", f"{fit_clients} Fit Clients → Campaign A{enroll_msg}")
+        _update_step(6, "completed", f"{seq_a_count} Qualified → Sequence A, {seq_b_count} Personal → Sequence B, {nurture_count} Nurture flagged for manual review{enroll_msg}")
 
         # ── Step 7: Extract topics for Agent 1 ─────────────────────────
         _update_step(7, "running", "Extracting blog topics from scraped websites for Agent 1...")
@@ -643,12 +720,14 @@ def run_agent2_background(
 
         _set_run_status("completed", result={
             "total_leads": len(leads),
-            "hot": hot,
-            "warm": warm,
-            "cold": cold,
-            "fit_clients": fit_clients,
+            "qualified_initial": qualified,
+            "nurture_initial": nurture,
+            "personal": personal,
+            "disqualified": disqualified,
+            "sequence_a_enrolled": seq_a_count,
+            "sequence_b_enrolled": seq_b_count,
+            "nurture_manual_review": nurture_count,
             "websites_scraped": scraped,
-            "klenty_enrolled": klenty_enrolled,
             "outplay_enrolled": outplay_enrolled,
         })
 

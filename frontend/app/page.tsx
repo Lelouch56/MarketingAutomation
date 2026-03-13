@@ -71,7 +71,7 @@ export default function Dashboard() {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
         level: 'info',
-        message: 'Agent 1 (Content Writer & SEO) started',
+        message: 'Agent 1 (Hangout Social) started',
         agent_id: 'agent1',
       });
       setSuccessMsg('Agent 1 started! Watching progress...');
@@ -96,7 +96,7 @@ export default function Dashboard() {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
         level: 'info',
-        message: 'Agent 2 (Lead Qualification) started',
+        message: 'Agent 2 (Matters) started',
         agent_id: 'agent2',
       });
       setSuccessMsg('Agent 2 started! Watching progress...');
@@ -121,7 +121,7 @@ export default function Dashboard() {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
         level: 'info',
-        message: 'Agent 3 (LinkedIn Outbound) started',
+        message: 'Agent 3 (Matters broad) started',
         agent_id: 'agent3',
       });
       setSuccessMsg('Agent 3 started! Watching progress...');
@@ -146,7 +146,7 @@ export default function Dashboard() {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
         level: 'info',
-        message: 'Agent 4 (Analytics & Reports) started',
+        message: 'Agent 4 (Ringside View) started',
         agent_id: 'agent4',
       });
       setSuccessMsg('Agent 4 started! Watching progress...');
@@ -202,8 +202,8 @@ export default function Dashboard() {
         <Grid item xs={12} sm={6}>
           <AgentCard
             agentId="agent2"
-            name="Lead Qualification"
-            description="Deduplicates and categorizes leads, scrapes company websites, AI-scores for travel industry fit, seeds blog topics to Agent 1, and auto-enrolls into Klenty/Outplay campaigns."
+            name="Matters"
+            description="Deduplicates and categorizes leads, scrapes company websites, AI-scores for travel industry fit, seeds blog topics to Hangout Social, and auto-enrolls into Klenty/Outplay campaigns."
             status={a2Status}
             stepsCount={8}
             onRun={handleRunAgent2}
@@ -217,8 +217,8 @@ export default function Dashboard() {
         <Grid item xs={12} sm={6}>
           <AgentCard
             agentId="agent3"
-            name="LinkedIn Outbound"
-            description="Reads Agent 2 hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved targets."
+            name="Matters broad"
+            description="Reads Matters hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved targets."
             status={a3Status}
             stepsCount={8}
             onRun={handleRunAgent3}
@@ -232,7 +232,7 @@ export default function Dashboard() {
         <Grid item xs={12} sm={6}>
           <AgentCard
             agentId="agent4"
-            name="Analytics & Reports"
+            name="Ringside View"
             description="Aggregates data from all agents, generates AI-powered performance insights, creates executive reports with visualizations and funnel analysis."
             status={a4Status}
             stepsCount={6}
@@ -247,8 +247,8 @@ export default function Dashboard() {
         <Grid item xs={12} sm={6}>
           <AgentCard
             agentId="agent1"
-            name="Content Writer & SEO"
-            description="Picks pending topics (seeded by Agent 2 or added manually), generates SEO-optimized blogs, runs quality checks, creates LinkedIn posts, and publishes to WordPress."
+            name="Hangout Social"
+            description="Picks pending topics (seeded by Agent 2 or added manually), generates SEO-optimized blogs, runs quality checks, and auto-posts to LinkedIn."
             status={a1Status}
             stepsCount={8}
             onRun={handleRunAgent1}

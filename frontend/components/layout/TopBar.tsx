@@ -38,7 +38,7 @@ export default function TopBar() {
 
   const title = pathname.startsWith('/agents/')
     ? 'Agent Details'
-    : PAGE_TITLES[pathname] || 'Marketing Automation AI';
+    : PAGE_TITLES[pathname] || 'Inbound 360';
 
   return (
     <AppBar

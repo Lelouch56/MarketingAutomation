@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { getLLMConfig, getWordPressConfig, getLinkedInConfig, getKlentyConfig, getOutplayConfig, getApolloConfig, getSalesNavigatorConfig, getHubSpotConfig, getPhantomBusterConfig } from '../lib/storage';
+import { getLLMConfig, getLinkedInConfig, getKlentyConfig, getOutplayConfig, getApolloConfig, getSalesNavigatorConfig, getHubSpotConfig, getPhantomBusterConfig } from '../lib/storage';
 import {
   AgentRunStatus,
   TopicRecord,
@@ -35,17 +35,6 @@ function buildRunRequest() {
     },
   };
 
-  // Attach WordPress config if available
-  const wpConfig = getWordPressConfig();
-  if (wpConfig?.siteUrl && wpConfig?.username && wpConfig?.appPassword) {
-    body.wordpress = {
-      site_url: wpConfig.siteUrl,
-      username: wpConfig.username,
-      app_password: wpConfig.appPassword,
-      publish_status: wpConfig.publishStatus || 'draft',
-    };
-  }
-
   // Attach LinkedIn config if available
   const liConfig = getLinkedInConfig();
   if (liConfig?.accessToken && liConfig?.authorUrn) {
@@ -69,12 +58,14 @@ function buildRunRequest() {
 
   // Attach Outplay config if available
   const outplayConfig = getOutplayConfig();
-  if (outplayConfig?.apiKey) {
+  if (outplayConfig?.clientSecret) {
     body.outplay = {
-      api_key: outplayConfig.apiKey,
-      sequence_name_a: outplayConfig.sequenceNameA || 'Travel Fit Sequence',
-      sequence_name_b: outplayConfig.sequenceNameB || 'Warm Lead Sequence',
-      sequence_name_c: outplayConfig.sequenceNameC || 'Cold Lead Sequence',
+      client_secret: outplayConfig.clientSecret,
+      client_id: outplayConfig.clientId || '',
+      user_id: outplayConfig.userId || '',
+      location: outplayConfig.location || 'us4',
+      sequence_id_a: outplayConfig.sequenceIdA || '',   // Qualified Lead Marktech
+      sequence_id_b: outplayConfig.sequenceIdB || '',   // Personal Lead Marktech
     };
   }
 
@@ -96,12 +87,13 @@ function buildRunRequest() {
     };
   }
 
-  // Attach HubSpot config if available (additional lead source for Agent 2)
+  // Attach HubSpot config if available (lead source for Agent 2 + outreach enrollment for Agent 3)
   const hubspotConfig = getHubSpotConfig();
   if (hubspotConfig?.accessToken) {
     body.hubspot = {
       access_token: hubspotConfig.accessToken,
       max_contacts: hubspotConfig.maxContacts ?? 100,
+      list_id: hubspotConfig.listId ?? '',
     };
   }
 
@@ -125,9 +117,8 @@ function buildRunRequest() {
 // ─────────────────────────────────────────────────────────────
 
 export const agent1Api = {
-  run: (opts?: { wordpress?: boolean; linkedin?: boolean }) => {
+  run: (opts?: { linkedin?: boolean }) => {
     const body = buildRunRequest();
-    if (opts?.wordpress === false) delete body.wordpress;
     if (opts?.linkedin === false) delete body.linkedin;
     return http.post('/agents/agent1/run', body);
   },
@@ -218,20 +209,6 @@ export const agent4Api = {
 // ─────────────────────────────────────────────────────────────
 
 export const integrationsApi = {
-  testWordPress: (config: {
-    site_url: string;
-    username: string;
-    app_password: string;
-  }): Promise<{ success: boolean; message: string; site_name?: string }> =>
-    http.post('/integrations/test/wordpress', config).then((r) => r.data),
-
-  testWordPressPublish: (config: {
-    site_url: string;
-    username: string;
-    app_password: string;
-  }): Promise<{ id?: string; link?: string; status?: string; message?: string }> =>
-    http.post('/integrations/test-publish/wordpress', config).then((r) => r.data),
-
   testLinkedIn: (config: {
     access_token: string;
     author_urn: string;
@@ -244,6 +221,14 @@ export const integrationsApi = {
   }): Promise<{ post_urn?: string; message: string }> =>
     http.post('/integrations/test-publish/linkedin', config).then((r) => r.data),
 
+  testLinkedInPublishWithImage: (config: {
+    access_token: string;
+    author_urn: string;
+    image_url: string;
+    post_text?: string;
+  }): Promise<{ post_urn?: string; message: string }> =>
+    http.post('/integrations/test-publish/linkedin-image', config).then((r) => r.data),
+
   testKlenty: (config: {
     api_key: string;
     user_email: string;
@@ -254,12 +239,24 @@ export const integrationsApi = {
     http.post('/integrations/test/klenty', config).then((r) => r.data),
 
   testOutplay: (config: {
-    api_key: string;
-    sequence_name_a?: string;
-    sequence_name_b?: string;
-    sequence_name_c?: string;
-  }): Promise<{ success: boolean; message: string; sequences_found?: number }> =>
+    client_secret: string;
+    client_id?: string;
+    user_id?: string;
+    location?: string;
+    sequence_id_a?: string;   // Qualified Lead Marktech
+    sequence_id_b?: string;   // Personal Lead Marktech
+  }): Promise<{ success: boolean; message: string }> =>
     http.post('/integrations/test/outplay', config).then((r) => r.data),
+
+  testOutplayProspect: (config: {
+    client_secret: string;
+    client_id?: string;
+    user_id?: string;
+    location?: string;
+    sequence_id_a?: string;   // Qualified Lead Marktech
+    sequence_id_b?: string;   // Personal Lead Marktech
+  }): Promise<{ success: boolean; message: string; prospect_id?: string }> =>
+    http.post('/integrations/test/outplay-prospect', config).then((r) => r.data),
 
   testApollo: (config: {
     api_key: string;
@@ -276,8 +273,16 @@ export const integrationsApi = {
   testHubSpot: (config: {
     access_token: string;
     max_contacts?: number;
+    list_id?: string;
   }): Promise<{ success: boolean; message: string }> =>
     http.post('/integrations/test/hubspot', config).then((r) => r.data),
+
+  testHubSpotProspect: (config: {
+    access_token: string;
+    max_contacts?: number;
+    list_id?: string;
+  }): Promise<{ success: boolean; message: string; contact_id?: string; enrolled?: boolean }> =>
+    http.post('/integrations/test/hubspot-prospect', config).then((r) => r.data),
 
   testPhantomBuster: (config: {
     api_key: string;

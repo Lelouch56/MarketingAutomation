@@ -5,7 +5,7 @@ import TopBar from '../components/layout/TopBar';
 import ThemeRegistry from '../components/layout/ThemeRegistry';
 
 export const metadata: Metadata = {
-  title: 'Marketing Automation AI',
+  title: 'Inbound 360',
   description: 'AI-powered marketing automation platform by Vervotech',
 };
 

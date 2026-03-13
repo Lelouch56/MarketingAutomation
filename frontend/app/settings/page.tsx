@@ -28,8 +28,6 @@ import LinkIcon from '@mui/icons-material/Link';
 import {
   getLLMConfig,
   setLLMConfig,
-  getWordPressConfig,
-  setWordPressConfig,
   getLinkedInConfig,
   setLinkedInConfig,
   getKlentyConfig,
@@ -45,7 +43,7 @@ import {
   getPhantomBusterConfig,
   setPhantomBusterConfig,
 } from '../../lib/storage';
-import { LLMConfig, WordPressConfig, LinkedInConfig, KlentyConfig, OutplayConfig, ApolloConfig, SalesNavigatorConfig, HubSpotConfig, PhantomBusterConfig, MODEL_OPTIONS, PROVIDER_LABELS } from '../../types';
+import { LLMConfig, LinkedInConfig, KlentyConfig, OutplayConfig, ApolloConfig, SalesNavigatorConfig, HubSpotConfig, PhantomBusterConfig, MODEL_OPTIONS, PROVIDER_LABELS } from '../../types';
 import { integrationsApi } from '../../services/api';
 
 const OTHER_INTEGRATIONS = [
@@ -82,20 +80,6 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [validation, setValidation] = useState<{ success: boolean; message: string } | null>(null);
 
-  // WordPress state
-  const [wpConfig, setWpConfig] = useState<WordPressConfig>({
-    siteUrl: '',
-    username: '',
-    appPassword: '',
-    publishStatus: 'draft',
-  });
-  const [wpSaved, setWpSaved] = useState(false);
-  const [wpShowPass, setWpShowPass] = useState(false);
-  const [wpTestResult, setWpTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [wpTesting, setWpTesting] = useState(false);
-  const [wpPublishTestResult, setWpPublishTestResult] = useState<{ success: boolean; message: string; link?: string } | null>(null);
-  const [wpPublishTesting, setWpPublishTesting] = useState(false);
-
   // LinkedIn state
   const [liConfig, setLiConfig] = useState<LinkedInConfig>({
     accessToken: '',
@@ -107,6 +91,10 @@ export default function SettingsPage() {
   const [liTesting, setLiTesting] = useState(false);
   const [liPublishTestResult, setLiPublishTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [liPublishTesting, setLiPublishTesting] = useState(false);
+  // LinkedIn image test
+  const [liImageUrl, setLiImageUrl] = useState('');
+  const [liImageTestResult, setLiImageTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [liImageTesting, setLiImageTesting] = useState(false);
 
   // Klenty state
   const [klentyConfig, setKlentyConfigState] = useState<KlentyConfig>({
@@ -123,15 +111,19 @@ export default function SettingsPage() {
 
   // Outplay state
   const [outplayConfig, setOutplayConfigState] = useState<OutplayConfig>({
-    apiKey: '',
-    sequenceNameA: 'Travel Fit Sequence',
-    sequenceNameB: 'Warm Lead Sequence',
-    sequenceNameC: 'Cold Lead Sequence',
+    clientSecret: '',
+    clientId: '',
+    userId: '',
+    location: 'us4',
+    sequenceIdA: '',
+    sequenceIdB: '',
   });
   const [outplaySaved, setOutplaySaved] = useState(false);
   const [outplayShowKey, setOutplayShowKey] = useState(false);
   const [outplayTestResult, setOutplayTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [outplayTesting, setOutplayTesting] = useState(false);
+  const [outplayProspectResult, setOutplayProspectResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [outplayProspectTesting, setOutplayProspectTesting] = useState(false);
 
   // Apollo state
   const [apolloConfig, setApolloConfigState] = useState<ApolloConfig>({
@@ -157,11 +149,14 @@ export default function SettingsPage() {
   const [hubspotConfig, setHubSpotConfigState] = useState<HubSpotConfig>({
     accessToken: '',
     maxContacts: 100,
+    listId: '',
   });
   const [hubspotSaved, setHubSpotSaved] = useState(false);
   const [hubspotShowToken, setHubSpotShowToken] = useState(false);
   const [hubspotTestResult, setHubSpotTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [hubspotTesting, setHubSpotTesting] = useState(false);
+  const [hubspotProspectResult, setHubSpotProspectResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [hubspotProspectTesting, setHubSpotProspectTesting] = useState(false);
 
   // PhantomBuster state
   const [pbConfig, setPbConfigState] = useState<PhantomBusterConfig>({
@@ -180,20 +175,18 @@ export default function SettingsPage() {
   useEffect(() => {
     const existing = getLLMConfig();
     if (existing) setConfig(existing);
-    const existingWp = getWordPressConfig();
-    if (existingWp) setWpConfig(existingWp);
     const existingLi = getLinkedInConfig();
     if (existingLi) setLiConfig(existingLi);
     const existingKlenty = getKlentyConfig();
     if (existingKlenty) setKlentyConfigState(existingKlenty);
     const existingOutplay = getOutplayConfig();
-    if (existingOutplay) setOutplayConfigState(existingOutplay);
+    if (existingOutplay) setOutplayConfigState((prev) => ({ ...prev, ...existingOutplay }));
     const existingApollo = getApolloConfig();
     if (existingApollo) setApolloConfigState(existingApollo);
     const existingSalesNav = getSalesNavigatorConfig();
     if (existingSalesNav) setSalesNavConfigState(existingSalesNav);
     const existingHubSpot = getHubSpotConfig();
-    if (existingHubSpot) setHubSpotConfigState(existingHubSpot);
+    if (existingHubSpot) setHubSpotConfigState({ listId: '', ...existingHubSpot });
     const existingPb = getPhantomBusterConfig();
     if (existingPb) setPbConfigState(existingPb);
   }, []);
@@ -238,69 +231,6 @@ export default function SettingsPage() {
     }
   };
 
-  // ── WordPress handlers ────────────────────────────────────────
-  const handleWpSave = () => {
-    setWordPressConfig(wpConfig);
-    setWpSaved(true);
-    setTimeout(() => setWpSaved(false), 3000);
-  };
-
-  const handleWpTest = async () => {
-    if (!wpConfig.siteUrl || !wpConfig.username || !wpConfig.appPassword) {
-      setWpTestResult({ success: false, message: 'Fill in all WordPress fields first.' });
-      return;
-    }
-    setWpTesting(true);
-    setWpTestResult(null);
-    try {
-      const result = await integrationsApi.testWordPress({
-        site_url: wpConfig.siteUrl,
-        username: wpConfig.username,
-        app_password: wpConfig.appPassword,
-      });
-      setWpTestResult(result);
-    } catch {
-      setWpTestResult({ success: false, message: 'Connection test failed. Check your credentials.' });
-    } finally {
-      setWpTesting(false);
-    }
-  };
-
-  const handleWpTestPublish = async () => {
-    if (!wpConfig.siteUrl || !wpConfig.username || !wpConfig.appPassword) {
-      setWpPublishTestResult({ success: false, message: 'Fill in all WordPress fields first.' });
-      return;
-    }
-    setWpPublishTesting(true);
-    setWpPublishTestResult(null);
-    try {
-      const result = await integrationsApi.testWordPressPublish({
-        site_url: wpConfig.siteUrl,
-        username: wpConfig.username,
-        app_password: wpConfig.appPassword,
-      });
-      if (result.link) {
-        setWpPublishTestResult({
-          success: true,
-          message: 'Dummy post published successfully!',
-          link: result.link,
-        });
-      } else {
-        setWpPublishTestResult({
-          success: false,
-          message: result.message || 'Failed to publish dummy HTML.',
-        });
-      }
-    } catch (err: any) {
-      setWpPublishTestResult({
-        success: false,
-        message: err.response?.data?.detail || err.message || 'Error publishing dummy HTML',
-      });
-    } finally {
-      setWpPublishTesting(false);
-    }
-  };
-
   // ── LinkedIn handlers ─────────────────────────────────────────
   const handleLiSave = () => {
     setLinkedInConfig(liConfig);
@@ -309,8 +239,8 @@ export default function SettingsPage() {
   };
 
   const handleLiTest = async () => {
-    if (!liConfig.accessToken || !liConfig.authorUrn) {
-      setLiTestResult({ success: false, message: 'Fill in all LinkedIn fields first.' });
+    if (!liConfig.accessToken) {
+      setLiTestResult({ success: false, message: 'Enter your LinkedIn access token first.' });
       return;
     }
     setLiTesting(true);
@@ -320,6 +250,10 @@ export default function SettingsPage() {
         access_token: liConfig.accessToken,
         author_urn: liConfig.authorUrn,
       });
+      // Auto-fill URN from /v2/me response if field is still empty
+      if (result.person_urn && !liConfig.authorUrn) {
+        setLiConfig((prev) => ({ ...prev, authorUrn: result.person_urn }));
+      }
       setLiTestResult(result);
     } catch {
       setLiTestResult({ success: false, message: 'Connection test failed. Check your token.' });
@@ -366,24 +300,50 @@ export default function SettingsPage() {
   };
 
   const handleOutplayTest = async () => {
-    if (!outplayConfig.apiKey) {
-      setOutplayTestResult({ success: false, message: 'Enter your Outplay API key first.' });
+    if (!outplayConfig.clientSecret || !outplayConfig.clientId) {
+      setOutplayTestResult({ success: false, message: 'Enter your Outplay Client Secret and Client ID first.' });
       return;
     }
     setOutplayTesting(true);
     setOutplayTestResult(null);
     try {
       const result = await integrationsApi.testOutplay({
-        api_key: outplayConfig.apiKey,
-        sequence_name_a: outplayConfig.sequenceNameA,
-        sequence_name_b: outplayConfig.sequenceNameB,
-        sequence_name_c: outplayConfig.sequenceNameC,
+        client_secret: outplayConfig.clientSecret,
+        client_id: outplayConfig.clientId,
+        user_id: outplayConfig.userId,
+        location: outplayConfig.location,
+        sequence_id_a: outplayConfig.sequenceIdA,
+        sequence_id_b: outplayConfig.sequenceIdB,
       });
       setOutplayTestResult(result);
     } catch {
-      setOutplayTestResult({ success: false, message: 'Connection test failed. Check your Outplay API key.' });
+      setOutplayTestResult({ success: false, message: 'Connection test failed. Check your Outplay Client Secret.' });
     } finally {
       setOutplayTesting(false);
+    }
+  };
+
+  const handleOutplayTestProspect = async () => {
+    if (!outplayConfig.clientSecret || !outplayConfig.clientId) {
+      setOutplayProspectResult({ success: false, message: 'Enter your Outplay Client Secret and Client ID first.' });
+      return;
+    }
+    setOutplayProspectTesting(true);
+    setOutplayProspectResult(null);
+    try {
+      const result = await integrationsApi.testOutplayProspect({
+        client_secret: outplayConfig.clientSecret,
+        client_id: outplayConfig.clientId,
+        user_id: outplayConfig.userId,
+        location: outplayConfig.location,
+        sequence_id_a: outplayConfig.sequenceIdA,
+        sequence_id_b: outplayConfig.sequenceIdB,
+      });
+      setOutplayProspectResult(result);
+    } catch {
+      setOutplayProspectResult({ success: false, message: 'Failed to send test prospect. Check your config.' });
+    } finally {
+      setOutplayProspectTesting(false);
     }
   };
 
@@ -459,12 +419,34 @@ export default function SettingsPage() {
       const result = await integrationsApi.testHubSpot({
         access_token: hubspotConfig.accessToken,
         max_contacts: hubspotConfig.maxContacts,
+        list_id: hubspotConfig.listId,
       });
       setHubSpotTestResult(result);
     } catch {
       setHubSpotTestResult({ success: false, message: 'Connection test failed. Check your HubSpot token.' });
     } finally {
       setHubSpotTesting(false);
+    }
+  };
+
+  const handleHubSpotTestProspect = async () => {
+    if (!hubspotConfig.accessToken) {
+      setHubSpotProspectResult({ success: false, message: 'Enter your HubSpot access token first.' });
+      return;
+    }
+    setHubSpotProspectTesting(true);
+    setHubSpotProspectResult(null);
+    try {
+      const result = await integrationsApi.testHubSpotProspect({
+        access_token: hubspotConfig.accessToken,
+        max_contacts: hubspotConfig.maxContacts,
+        list_id: hubspotConfig.listId,
+      });
+      setHubSpotProspectResult(result);
+    } catch {
+      setHubSpotProspectResult({ success: false, message: 'Test prospect failed. Check your token and try again.' });
+    } finally {
+      setHubSpotProspectTesting(false);
     }
   };
 
@@ -533,6 +515,39 @@ export default function SettingsPage() {
       });
     } finally {
       setLiPublishTesting(false);
+    }
+  };
+
+  const handleLiTestPostWithImage = async () => {
+    if (!liConfig.accessToken || !liConfig.authorUrn) {
+      setLiImageTestResult({ success: false, message: 'Fill in LinkedIn access token and author URN first.' });
+      return;
+    }
+    if (!liImageUrl.trim()) {
+      setLiImageTestResult({ success: false, message: 'Enter a public image URL to test image posting.' });
+      return;
+    }
+    setLiImageTesting(true);
+    setLiImageTestResult(null);
+    try {
+      const result = await integrationsApi.testLinkedInPublishWithImage({
+        access_token: liConfig.accessToken,
+        author_urn: liConfig.authorUrn,
+        image_url: liImageUrl.trim(),
+      });
+      setLiImageTestResult({
+        success: !!result.post_urn,
+        message: result.post_urn
+          ? `Image post published! URN: ${result.post_urn}`
+          : (result.message || 'Failed to publish image post.'),
+      });
+    } catch (err: any) {
+      setLiImageTestResult({
+        success: false,
+        message: err.response?.data?.detail || err.message || 'Error publishing image post',
+      });
+    } finally {
+      setLiImageTesting(false);
     }
   };
 
@@ -682,126 +697,16 @@ export default function SettingsPage() {
         </Box>
       </Paper>
 
-      {/* ──────────────────────── WordPress Integration ──────────────────── */}
+      {/* ──────────────────────── Integrations Header ──────────────────── */}
       <Typography variant="h6" gutterBottom>Integrations</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Connect external services to enable full automation capabilities.
       </Typography>
 
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-          <Typography variant="subtitle1" fontWeight={600}>WordPress REST API</Typography>
-          <Box
-            component="span"
-            sx={{
-              fontSize: 11, bgcolor: wpConfig.siteUrl ? 'success.main' : 'action.hover',
-              color: wpConfig.siteUrl ? 'white' : 'text.secondary',
-              px: 1, py: 0.25, borderRadius: 1,
-            }}
-          >
-            {wpConfig.siteUrl ? 'Configured' : 'Not Configured'}
-          </Box>
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          Publish AI-generated blogs directly to your WordPress site. Requires an Application Password
-          (Users → Profile → Application Passwords in your WP admin).
-        </Typography>
-
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="WordPress Site URL"
-              placeholder="https://yoursite.com"
-              value={wpConfig.siteUrl}
-              onChange={(e) => setWpConfig((p) => ({ ...p, siteUrl: e.target.value }))}
-              fullWidth size="small"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="Username"
-              placeholder="admin"
-              value={wpConfig.username}
-              onChange={(e) => setWpConfig((p) => ({ ...p, username: e.target.value }))}
-              fullWidth size="small"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="Application Password"
-              type={wpShowPass ? 'text' : 'password'}
-              value={wpConfig.appPassword}
-              onChange={(e) => setWpConfig((p) => ({ ...p, appPassword: e.target.value }))}
-              fullWidth size="small"
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setWpShowPass((s) => !s)}>
-                      {wpShowPass ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Publish Status</InputLabel>
-              <Select
-                value={wpConfig.publishStatus}
-                label="Publish Status"
-                onChange={(e) => setWpConfig((p) => ({ ...p, publishStatus: e.target.value as 'draft' | 'publish' }))}
-              >
-                <MenuItem value="draft">Draft (review first)</MenuItem>
-                <MenuItem value="publish">Publish immediately</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-        </Grid>
-
-        <Box display="flex" gap={2} mt={2.5} alignItems="center" flexWrap="wrap">
-          <Button variant="contained" size="small" onClick={handleWpSave}
-            startIcon={wpSaved ? <CheckCircleIcon /> : undefined}>
-            {wpSaved ? 'Saved!' : 'Save WordPress Config'}
-          </Button>
-          <Button variant="outlined" size="small" onClick={handleWpTest}
-            disabled={wpTesting || wpPublishTesting}
-            startIcon={wpTesting ? <CircularProgress size={14} /> : undefined}>
-            {wpTesting ? 'Testing…' : 'Test Connection'}
-          </Button>
-          <Button variant="outlined" color="secondary" size="small" onClick={handleWpTestPublish}
-            disabled={wpPublishTesting || wpTesting}
-            startIcon={wpPublishTesting ? <CircularProgress size={14} /> : undefined}>
-            {wpPublishTesting ? 'Publishing…' : 'Test Publish (Dummy)'}
-          </Button>
-        </Box>
-
-        {wpTestResult && (
-          <Alert severity={wpTestResult.success ? 'success' : 'error'} sx={{ mt: 2, maxWidth: 500 }}
-            onClose={() => setWpTestResult(null)}>
-            {wpTestResult.message}
-          </Alert>
-        )}
-
-        {wpPublishTestResult && (
-          <Alert severity={wpPublishTestResult.success ? 'success' : 'error'} sx={{ mt: 2, maxWidth: 500 }}
-            onClose={() => setWpPublishTestResult(null)}>
-            {wpPublishTestResult.message}
-            {wpPublishTestResult.link && (
-              <Box mt={1}>
-                <a href={wpPublishTestResult.link} target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>
-                  <b>View Published Post</b>
-                </a>
-              </Box>
-            )}
-          </Alert>
-        )}
-      </Paper>
-
       {/* ──────────────────────── LinkedIn Integration ───────────────────── */}
       <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-          <Typography variant="subtitle1" fontWeight={600}>LinkedIn API</Typography>
+          <Typography variant="subtitle1" fontWeight={600}>LinkedIn API — Auto-Post Blogs &amp; Content</Typography>
           <Box
             component="span"
             sx={{
@@ -814,9 +719,23 @@ export default function SettingsPage() {
           </Box>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          Auto-post LinkedIn content after blog publication. Requires an OAuth access token from a
-          LinkedIn developer app. Tokens expire after 60 days.
+          Agent 1 auto-posts to LinkedIn after each blog is generated. Supports text posts, URL-preview posts
+          (article card), and image posts. Requires an OAuth access token — tokens expire after 60 days.
         </Typography>
+
+        {/* How-to guide */}
+        <Box sx={{ bgcolor: 'action.hover', borderRadius: 1, p: 1.5, mb: 2.5 }}>
+          <Typography variant="caption" fontWeight={700} display="block" mb={0.5}>
+            🔑 How to get your LinkedIn Access Token &amp; Author URN
+          </Typography>
+          <Typography variant="caption" display="block" sx={{ lineHeight: 1.8 }}>
+            1. Go to <a href="https://www.linkedin.com/developers/apps/new" target="_blank" rel="noreferrer">developer.linkedin.com/apps</a> → Create a new app<br />
+            2. Under <b>Products</b> tab → Request access to <b>"Share on LinkedIn"</b> (gives <code>w_member_social</code>)<br />
+            3. Also request <b>"Sign In with LinkedIn using OpenID Connect"</b> (gives <code>profile</code> scope — needed to auto-fill URN)<br />
+            4. Go to <a href="https://www.linkedin.com/developers/tools/oauth/token-inspector" target="_blank" rel="noreferrer">OAuth Token Inspector</a> → select your app → check <code>w_member_social</code> + <code>profile</code> → click <b>"Request access token"</b><br />
+            5. Paste token below → click <b>Test Connection</b> → Author URN <b>auto-fills automatically</b> ✓
+          </Typography>
+        </Box>
 
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
@@ -845,7 +764,7 @@ export default function SettingsPage() {
               onChange={(e) => setLiConfig((p) => ({ ...p, authorUrn: e.target.value }))}
               fullWidth size="small"
               placeholder="urn:li:person:xxxxxx"
-              helperText="Your LinkedIn person or organization URN"
+              helperText="Auto-filled when you click Test Connection — or enter manually"
             />
           </Grid>
         </Grid>
@@ -856,14 +775,14 @@ export default function SettingsPage() {
             {liSaved ? 'Saved!' : 'Save LinkedIn Config'}
           </Button>
           <Button variant="outlined" size="small" onClick={handleLiTest}
-            disabled={liTesting || liPublishTesting}
+            disabled={liTesting || liPublishTesting || liImageTesting}
             startIcon={liTesting ? <CircularProgress size={14} /> : undefined}>
             {liTesting ? 'Testing…' : 'Test Connection'}
           </Button>
           <Button variant="outlined" color="secondary" size="small" onClick={handleLiTestPublish}
-            disabled={liPublishTesting || liTesting}
+            disabled={liPublishTesting || liTesting || liImageTesting}
             startIcon={liPublishTesting ? <CircularProgress size={14} /> : undefined}>
-            {liPublishTesting ? 'Publishing…' : 'Test Publish (Dummy)'}
+            {liPublishTesting ? 'Publishing…' : 'Test Text Post'}
           </Button>
         </Box>
 
@@ -880,6 +799,44 @@ export default function SettingsPage() {
             {liPublishTestResult.message}
           </Alert>
         )}
+
+        {/* Image post test */}
+        <Box sx={{ mt: 3, pt: 2.5, borderTop: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="body2" fontWeight={600} gutterBottom>
+            🖼️ Test Image + Text Post
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+            Posts a test message with an image to LinkedIn. Enter any publicly accessible image URL
+            (e.g. from Unsplash, your CDN, or a blog post). LinkedIn will upload and attach the image.
+          </Typography>
+          <Box display="flex" gap={1.5} alignItems="flex-start" flexWrap="wrap">
+            <TextField
+              label="Public Image URL"
+              value={liImageUrl}
+              onChange={(e) => setLiImageUrl(e.target.value)}
+              size="small"
+              placeholder="https://images.unsplash.com/photo-..."
+              sx={{ flexGrow: 1, minWidth: 240 }}
+            />
+            <Button
+              variant="outlined"
+              color="secondary"
+              size="small"
+              onClick={handleLiTestPostWithImage}
+              disabled={liImageTesting || liTesting || liPublishTesting}
+              startIcon={liImageTesting ? <CircularProgress size={14} /> : undefined}
+              sx={{ whiteSpace: 'nowrap', mt: 0.25 }}
+            >
+              {liImageTesting ? 'Posting…' : 'Test Post + Image'}
+            </Button>
+          </Box>
+          {liImageTestResult && (
+            <Alert severity={liImageTestResult.success ? 'success' : 'error'} sx={{ mt: 2, maxWidth: 500 }}
+              onClose={() => setLiImageTestResult(null)}>
+              {liImageTestResult.message}
+            </Alert>
+          )}
+        </Box>
       </Paper>
 
       {/* ──────────────────────── Klenty Integration ────────────────────── */}
@@ -934,32 +891,32 @@ export default function SettingsPage() {
           </Grid>
           <Grid item xs={12} sm={4}>
             <TextField
-              label="Campaign A Name (Fit Clients)"
+              label="Campaign A Name (Qualified Leads)"
               value={klentyConfig.campaignAName}
               onChange={(e) => setKlentyConfigState((p) => ({ ...p, campaignAName: e.target.value }))}
               fullWidth size="small"
               placeholder="Campaign A"
-              helperText="For hot leads with score > 70"
+              helperText="For Qualified Leads — business email + website, ICP score > 70"
             />
           </Grid>
           <Grid item xs={12} sm={4}>
             <TextField
-              label="Campaign B Name (Warm Leads)"
+              label="Campaign B Name (Personal Leads)"
               value={klentyConfig.campaignBName}
               onChange={(e) => setKlentyConfigState((p) => ({ ...p, campaignBName: e.target.value }))}
               fullWidth size="small"
               placeholder="Campaign B"
-              helperText="For warm leads"
+              helperText="For Personal Leads — Gmail, Yahoo, Outlook, etc."
             />
           </Grid>
           <Grid item xs={12} sm={4}>
             <TextField
-              label="Campaign C Name (Cold Leads)"
+              label="Campaign C Name (Nurture Leads)"
               value={klentyConfig.campaignCName}
               onChange={(e) => setKlentyConfigState((p) => ({ ...p, campaignCName: e.target.value }))}
               fullWidth size="small"
               placeholder="Campaign C"
-              helperText="For cold leads"
+              helperText="Optional — for Nurture Leads needing manual review"
             />
           </Grid>
         </Grid>
@@ -991,12 +948,12 @@ export default function SettingsPage() {
           <Box
             component="span"
             sx={{
-              fontSize: 11, bgcolor: outplayConfig.apiKey ? 'success.main' : 'action.hover',
-              color: outplayConfig.apiKey ? 'white' : 'text.secondary',
+              fontSize: 11, bgcolor: (outplayConfig.clientSecret && outplayConfig.clientId) ? 'success.main' : 'action.hover',
+              color: (outplayConfig.clientSecret && outplayConfig.clientId) ? 'white' : 'text.secondary',
               px: 1, py: 0.25, borderRadius: 1,
             }}
           >
-            {outplayConfig.apiKey ? 'Configured' : 'Not Configured'}
+            {(outplayConfig.clientSecret && outplayConfig.clientId) ? 'Configured' : 'Not Configured'}
           </Box>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
@@ -1007,12 +964,13 @@ export default function SettingsPage() {
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Outplay API Key"
+              label="Client Secret"
               type={outplayShowKey ? 'text' : 'password'}
-              value={outplayConfig.apiKey}
-              onChange={(e) => setOutplayConfigState((p) => ({ ...p, apiKey: e.target.value }))}
+              value={outplayConfig.clientSecret}
+              onChange={(e) => setOutplayConfigState((p) => ({ ...p, clientSecret: e.target.value }))}
               fullWidth size="small"
-              placeholder="Your Outplay API key"
+              placeholder="Your Outplay client_secret"
+              helperText="Sent as X-CLIENT-SECRET header — found in Outplay Settings → API"
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
@@ -1026,32 +984,52 @@ export default function SettingsPage() {
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Sequence A Name (Fit Clients)"
-              value={outplayConfig.sequenceNameA}
-              onChange={(e) => setOutplayConfigState((p) => ({ ...p, sequenceNameA: e.target.value }))}
+              label="Client ID"
+              value={outplayConfig.clientId}
+              onChange={(e) => setOutplayConfigState((p) => ({ ...p, clientId: e.target.value }))}
               fullWidth size="small"
-              placeholder="Travel Fit Sequence"
-              helperText="For hot leads with score > 70"
+              placeholder="Your Outplay client_id"
+              helperText="?client_id= query param — found in Outplay Settings → API"
             />
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Sequence B Name (Warm Leads)"
-              value={outplayConfig.sequenceNameB}
-              onChange={(e) => setOutplayConfigState((p) => ({ ...p, sequenceNameB: e.target.value }))}
+              label="User ID"
+              value={outplayConfig.userId}
+              onChange={(e) => setOutplayConfigState((p) => ({ ...p, userId: e.target.value }))}
               fullWidth size="small"
-              placeholder="Warm Lead Sequence"
-              helperText="For warm leads"
+              placeholder="e.g. 39520"
+              helperText="Your Outplay user ID — required to enroll prospects in sequences (Settings → API or profile URL)"
             />
           </Grid>
           <Grid item xs={12} sm={6}>
             <TextField
-              label="Sequence C Name (Cold Leads)"
-              value={outplayConfig.sequenceNameC}
-              onChange={(e) => setOutplayConfigState((p) => ({ ...p, sequenceNameC: e.target.value }))}
+              label="Location / Server Region"
+              value={outplayConfig.location}
+              onChange={(e) => setOutplayConfigState((p) => ({ ...p, location: e.target.value }))}
               fullWidth size="small"
-              placeholder="Cold Lead Sequence"
-              helperText="For cold leads"
+              placeholder="us4"
+              helperText="Regional server prefix, e.g. us4 → us4-api.outplayhq.com"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Sequence A ID — Qualified Lead Marktech"
+              value={outplayConfig.sequenceIdA}
+              onChange={(e) => setOutplayConfigState((p) => ({ ...p, sequenceIdA: e.target.value }))}
+              fullWidth size="small"
+              placeholder="e.g. 51355"
+              helperText="For Qualified Leads (business email + website, ICP score > 70) — numeric ID from Outplay sequence URL"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Sequence B ID — Personal Lead Marktech"
+              value={outplayConfig.sequenceIdB}
+              onChange={(e) => setOutplayConfigState((p) => ({ ...p, sequenceIdB: e.target.value }))}
+              fullWidth size="small"
+              placeholder="e.g. 51356"
+              helperText="For Personal Leads (Gmail, Yahoo, Outlook, etc.) — numeric ID from Outplay sequence URL"
             />
           </Grid>
         </Grid>
@@ -1066,12 +1044,26 @@ export default function SettingsPage() {
             startIcon={outplayTesting ? <CircularProgress size={14} /> : undefined}>
             {outplayTesting ? 'Testing…' : 'Test Connection'}
           </Button>
+          <Button variant="outlined" size="small" color="secondary" onClick={handleOutplayTestProspect}
+            disabled={outplayProspectTesting}
+            startIcon={outplayProspectTesting ? <CircularProgress size={14} /> : undefined}>
+            {outplayProspectTesting ? 'Sending…' : 'Send Test Prospect'}
+          </Button>
         </Box>
 
         {outplayTestResult && (
           <Alert severity={outplayTestResult.success ? 'success' : 'error'} sx={{ mt: 2, maxWidth: 500 }}
             onClose={() => setOutplayTestResult(null)}>
             {outplayTestResult.message}
+          </Alert>
+        )}
+
+        {outplayProspectResult && (
+          <Alert severity={outplayProspectResult.success ? 'success' : 'error'} sx={{ mt: 1, maxWidth: 500 }}
+            onClose={() => setOutplayProspectResult(null)}>
+            {outplayProspectResult.success
+              ? `✓ Dummy prospect created and enrolled in Qualified Lead Marktech sequence ${outplayConfig.sequenceIdA}`
+              : outplayProspectResult.message}
           </Alert>
         )}
       </Paper>
@@ -1246,7 +1238,7 @@ export default function SettingsPage() {
       {/* ──────────────────────── HubSpot CRM Integration ───────────────── */}
       <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-          <Typography variant="subtitle1" fontWeight={600}>HubSpot CRM — Lead Source (Agent 2)</Typography>
+          <Typography variant="subtitle1" fontWeight={600}>HubSpot CRM — Lead Source (Agent 2) &amp; Email Sequences (Agent 3)</Typography>
           <Box
             component="span"
             sx={{
@@ -1259,9 +1251,10 @@ export default function SettingsPage() {
           </Box>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          When configured, Agent 2 automatically pulls contacts from your HubSpot CRM and merges them
-          with leads from the local database before processing. Duplicates are removed automatically.
-          Requires a HubSpot Private App with <strong>crm.objects.contacts.read</strong> scope.
+          Agent 2 pulls contacts from HubSpot CRM as a lead source. Agent 3 creates prospects as
+          HubSpot contacts, sets their lead status to <strong>"In Progress"</strong>, and optionally adds
+          them to a specific list. All <strong>completely free</strong> on any HubSpot plan.
+          Private App scopes needed: <code>crm.objects.contacts.read/write</code> + <code>crm.lists.write</code> (for list).
         </Typography>
 
         <Grid container spacing={2}>
@@ -1296,6 +1289,16 @@ export default function SettingsPage() {
               helperText="Contacts to import per agent run (1–1000)"
             />
           </Grid>
+          <Grid item xs={12} sm={8}>
+            <TextField
+              label="List ID (optional — adds contact to a specific list)"
+              value={hubspotConfig.listId}
+              onChange={(e) => setHubSpotConfigState((p) => ({ ...p, listId: e.target.value }))}
+              fullWidth size="small"
+              placeholder="e.g. 9"
+              helperText="Create a Static list in HubSpot (Contacts → Lists → Create list → choose 'Static list', NOT 'Active list'). Then open it — the number in the URL (e.g. objectLists/9) is your List ID. Create a Workflow triggered by this list to auto-send emails."
+            />
+          </Grid>
         </Grid>
 
         <Box display="flex" gap={2} mt={2.5} alignItems="center" flexWrap="wrap">
@@ -1308,6 +1311,11 @@ export default function SettingsPage() {
             startIcon={hubspotTesting ? <CircularProgress size={14} /> : undefined}>
             {hubspotTesting ? 'Testing…' : 'Test Connection'}
           </Button>
+          <Button variant="outlined" color="secondary" size="small" onClick={handleHubSpotTestProspect}
+            disabled={hubspotProspectTesting || !hubspotConfig.accessToken}
+            startIcon={hubspotProspectTesting ? <CircularProgress size={14} /> : undefined}>
+            {hubspotProspectTesting ? 'Sending…' : 'Send Test Prospect'}
+          </Button>
         </Box>
 
         {hubspotTestResult && (
@@ -1317,13 +1325,21 @@ export default function SettingsPage() {
           </Alert>
         )}
 
+        {hubspotProspectResult && (
+          <Alert severity={hubspotProspectResult.success ? 'success' : 'error'} sx={{ mt: 1, maxWidth: 600 }}
+            onClose={() => setHubSpotProspectResult(null)}>
+            {hubspotProspectResult.message}
+          </Alert>
+        )}
+
         <Divider sx={{ mt: 3, mb: 2 }} />
         <Typography variant="caption" color="text.secondary">
-          Create a free Private App at{' '}
+          Create a Private App at{' '}
           <a href="https://app.hubspot.com/private-apps" target="_blank" rel="noopener noreferrer">
             app.hubspot.com/private-apps
           </a>
-          {' '}· Required scope: <code>crm.objects.contacts.read</code>
+          {' '}· Scopes: <code>crm.objects.contacts.read/write</code> (required) + <code>crm.lists.write</code> (for list)
+          · List ID: the number from <code>objectLists/N</code> in the URL — e.g. <code>objectLists/9</code> → enter <strong>9</strong>
         </Typography>
       </Paper>
 

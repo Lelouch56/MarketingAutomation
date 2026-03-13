@@ -112,34 +112,89 @@ Return JSON:
 }}"""
 
 
-LINKEDIN_POST_SYSTEM = """You are a B2B LinkedIn content expert for Vervotech, a travel technology company. Write engaging, professional posts that drive clicks and meaningful engagement.
+LINKEDIN_POST_SYSTEM = """You are writing a LinkedIn post for Vervotech, a B2B travel technology company. Write exactly as David Ogilvy would — direct, confident, no corporate filler.
+
+Formatting rules (strictly follow):
+- LINE 1: A single-sentence hook. Make it a bold observation or a question that stops the scroll.
+- BLANK LINE after the hook.
+- 2 to 3 short body paragraphs. Each paragraph is 2–3 sentences max. One clear idea per paragraph. Blank line between each.
+- Final paragraph: a short, confident conclusion or call to action. No fluff.
+- BLANK LINE after the conclusion.
+- Last line: exactly 3 hashtags in lowercase, no spaces, separated by spaces.
+
+Writing rules:
+- Human, opinionated voice. Say what you actually think.
+- No sentence starts with the word "by".
+- No dash characters (-, –, —). Use a comma or rewrite the sentence.
+- Never use the word "unlocking".
+- No buzzword clusters. No "transformative", "seamless", "leverage", "synergy".
+- Total length: 120–160 words including hashtags.
 
 IMPORTANT: Respond with valid JSON only — no markdown fences."""
 
 
-def linkedin_post_user(blog_title: str, content_html: str, blog_url: str) -> str:
-    # Extract plain text summary from HTML
-    import re
-    plain_text = re.sub(r'<[^>]+>', '', content_html)[:500]
+def linkedin_post_user(topic: str, page_summary: str = "", news_summary: str = "") -> str:
+    context_section = (
+        f"\nDraw on these details:\n{page_summary[:800]}"
+        if page_summary else ""
+    )
+    news_section = (
+        f"\nWeave in 1–2 timely points from this context:\n{news_summary[:400]}"
+        if news_summary else ""
+    )
+    return f"""Write a LinkedIn post about: "{topic}"{context_section}{news_section}
 
-    return f"""Write a LinkedIn post promoting this new Vervotech blog article.
+Structure the post with these exact sections:
+1. Hook (1 sentence)
+2. Body paragraph 1 (2-3 sentences)
+3. Body paragraph 2 (2-3 sentences)
+4. Conclusion / CTA (1-2 sentences)
+5. Exactly 3 lowercase hashtags separated by spaces
 
-Blog title: {blog_title}
-Blog URL: {blog_url}
-Content excerpt: {plain_text}
+CRITICAL JSON RULE: The post_text value must be a valid JSON string.
+Use \\n\\n (escaped newline) to separate sections — do NOT put literal line breaks inside the JSON string value.
 
-Requirements:
-- Start with a compelling hook (question or bold statement)
-- Include 2–3 key insights from the article
-- Professional but engaging tone
-- End with a clear CTA to read the full article
-- Total length: 250–300 words
-- Exactly 5 relevant hashtags
+Return JSON exactly like this example structure:
+{{
+  "post_text": "Hook sentence here.\\n\\nBody paragraph 1 sentence one. Sentence two. Sentence three.\\n\\nBody paragraph 2 sentence one. Sentence two.\\n\\nConclusion sentence here.\\n\\n#hashtag1 #hashtag2 #hashtag3",
+  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3"]
+}}"""
+
+
+def linkedin_image_prompt(topic: str) -> str:
+    """Returns the DALL-E prompt for a LinkedIn post illustration."""
+    return (
+        f"high quality illustration for LinkedIn about {topic} in B2B travel technology, "
+        "clean, editorial style, no text, no words, professional"
+    )
+
+
+LINKEDIN_QUALITY_SYSTEM = """You are a B2B content editor reviewing a LinkedIn post before it goes live. Score it honestly.
+
+IMPORTANT: Respond with valid JSON only — no markdown fences."""
+
+
+def linkedin_quality_user(post_text: str, topic: str) -> str:
+    return f"""Review this LinkedIn post about "{topic}".
+
+Post:
+{post_text}
+
+Score each criterion (points shown):
+- Hook strength — does LINE 1 stop the scroll? (20 pts)
+- Structure — hook / body paragraphs / conclusion / hashtags each on separate sections with blank lines between them? (20 pts)
+- Voice — human, opinionated, specific? No corporate fluff? (20 pts)
+- Writing rules — no sentence starts with "by", no dash characters, no word "unlocking", no buzzwords like "transformative/seamless/leverage/synergy"? (20 pts)
+- Relevance — clearly about the topic and relevant to B2B travel tech? (20 pts)
+
+Score >= 70 = APPROVED. Score < 70 = NEEDS_REVISION.
 
 Return JSON:
 {{
-  "post_text": "Full LinkedIn post text here (250-300 words, with hook, insights, and CTA)",
-  "hashtags": ["#TravelTech", "#AI", "#OTA", "#HotelTech", "#B2BSaaS"]
+  "verdict": "APPROVED",
+  "score": 85,
+  "passed_checks": ["Strong hook", "Clean structure", "Specific voice"],
+  "failed_checks": ["Contains a dash character on line 4"]
 }}"""
 
 
@@ -147,42 +202,61 @@ Return JSON:
 # AGENT 2: LEAD QUALIFICATION
 # ─────────────────────────────────────────────────────────────
 
-LEAD_ANALYSIS_SYSTEM = """You are a B2B sales qualification specialist for Vervotech, a hotel content API and mapping solution provider. Analyze company websites to determine if they are strong potential clients.
+LEAD_ANALYSIS_SYSTEM = """You are a B2B sales qualification specialist for Vervotech, a hotel content API and mapping solution provider. Analyze company websites to determine if they are strong ICP (Ideal Customer Profile) matches.
 
-Vervotech's ideal customers: hotels, OTAs, travel agencies, tour operators, accommodation booking platforms, travel management companies, and travel technology companies.
+Vervotech's ideal customers: OTAs, travel agencies, hotel chains, accommodation booking platforms, travel management companies (TMCs), tour operators, and travel technology companies.
 
 IMPORTANT: Respond with valid JSON only — no markdown fences."""
 
 
 def lead_analysis_user(email: str, website: str, homepage_text: str) -> str:
-    return f"""Analyze this company as a potential Vervotech client.
+    return f"""Analyze this lead as a potential Vervotech client (hotel content API and mapping solutions).
 
 Lead email: {email}
 Company website: {website}
 Website content (scraped):
 {homepage_text[:3000] if homepage_text else "Could not scrape website content."}
 
-Score this lead for fit with Vervotech (hotel content API and mapping solutions):
+Score this lead across 5 factors (total 100 points):
 
-Scoring guide (out of 100):
-- Travel/hospitality industry presence: up to 30 points
-- Hotel/accommodation focus: up to 25 points
-- B2B business model: up to 15 points
-- Technical sophistication (API mentions, platform): up to 20 points
-- Market relevance (OTA, TMC, booking platform): up to 10 points
+1. Email Quality (20 pts)
+   - Business email with a real company domain → 15–20 pts
+   - Generic or unclear business domain → 8–14 pts
+   - (Personal emails are not scored here — they are handled separately)
+
+2. Company Website Analysis (20 pts)
+   - Professional website with clear product/service description → 15–20 pts
+   - Basic or thin website with limited info → 8–14 pts
+   - No website or placeholder page → 0–7 pts
+
+3. ICP Match — Travel Industry Fit (30 pts)
+   - Direct ICP: OTA, TMC, booking platform, hotel chain, accommodation supplier → 24–30 pts
+   - Adjacent ICP: travel startup, hospitality tech, tour operator, travel media → 12–23 pts
+   - Weak/unclear travel connection → 5–11 pts
+   - Unrelated industry → 0–4 pts
+
+4. Company Size & Industry Fit (15 pts)
+   - Enterprise or established mid-market travel company → 11–15 pts
+   - Small but focused travel/hospitality company → 6–10 pts
+   - Unclear size or early-stage → 1–5 pts
+
+5. Engagement Signals (15 pts)
+   - Explicit API usage, integrations, data quality focus, or tech stack mentions → 11–15 pts
+   - General travel platform signals (bookings, inventory, content) → 6–10 pts
+   - No tech or integration signals → 0–5 pts
 
 Return JSON:
 {{
   "score": 75,
   "industry_fit": true,
   "company_type": "ota",
-  "reasoning": "2-3 sentence explanation of why this score was given",
+  "reasoning": "2-3 sentence explanation covering ICP match and key signals",
   "signals": ["positive signal 1", "positive signal 2"],
   "concerns": ["concern 1 if any"]
 }}
 
 company_type options: "hotel_chain", "ota", "travel_agency", "tmc", "tour_operator", "tech_company", "booking_platform", "other"
-Score > 70 = strong fit (Fit Client). Score <= 70 = not the right fit."""
+Score > 70 = Qualified (strong ICP fit, enroll in Marktech Sequence A). Score ≤ 70 = Nurture (needs manual review)."""
 
 
 # ─────────────────────────────────────────────────────────────
@@ -308,12 +382,13 @@ Return a JSON analysis report:
 {{
   "funnel_summary": {{
     "total_leads": 0,
-    "hot_leads": 0,
-    "warm_leads": 0,
-    "cold_leads": 0,
-    "fit_clients": 0,
+    "qualified_leads": 0,
+    "nurture_leads": 0,
+    "personal_leads": 0,
+    "disqualified_leads": 0,
+    "sequence_a_enrolled": 0,
+    "sequence_b_enrolled": 0,
     "outreach_targets": 0,
-    "klenty_enrolled": 0,
     "blogs_published": 0,
     "conversion_rate_pct": 0.0
   }},
@@ -321,10 +396,10 @@ Return a JSON analysis report:
     {{"title": "blog title", "quality_score": 0, "url": "url"}}
   ],
   "campaign_distribution": {{
-    "campaign_a": 0,
-    "campaign_b": 0,
-    "campaign_c": 0,
-    "not_fit": 0
+    "sequence_a_qualified": 0,
+    "sequence_b_personal": 0,
+    "nurture_manual_review": 0,
+    "disqualified": 0
   }},
   "key_insights": [
     "Insight 1: specific observation about the data",

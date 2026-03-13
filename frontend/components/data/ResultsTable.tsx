@@ -42,9 +42,10 @@ const BADGE_COLORS: Record<string, 'success' | 'warning' | 'error' | 'default' |
   completed: 'success',
   skipped: 'default',
   failed: 'error',
-  // Enrollment status (agent2 Outplay / Klenty)
+  // Enrollment status (agent2 Outplay / Klenty / HubSpot)
   Enrolled: 'success',
   'Not enrolled': 'default',
+  Added: 'warning',
   // Topic source (agent1)
   web_scrape: 'info',
 };

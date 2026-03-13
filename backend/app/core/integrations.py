@@ -2,6 +2,7 @@
 External integration clients for WordPress REST API, LinkedIn UGC API, and Klenty.
 """
 
+import base64
 import requests
 from dataclasses import dataclass
 from typing import Optional
@@ -113,10 +114,112 @@ class LinkedInConfig:
     author_urn: str     # e.g. "urn:li:person:xxxxxx" or "urn:li:organization:xxxxxx"
 
 
-def post_to_linkedin(config: LinkedInConfig, post_text: str, blog_url: Optional[str] = None) -> dict:
+def _linkedin_register_image_upload(config: LinkedInConfig) -> tuple:
+    """
+    Step 1 of LinkedIn image upload: register the upload with LinkedIn Assets API.
+    Returns (upload_url, asset_urn).
+    Raises IntegrationError on failure.
+    """
+    headers = {
+        "Authorization": f"Bearer {config.access_token}",
+        "Content-Type": "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+    }
+    register_payload = {
+        "registerUploadRequest": {
+            "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
+            "owner": config.author_urn,
+            "serviceRelationships": [
+                {
+                    "relationshipType": "OWNER",
+                    "identifier": "urn:li:userGeneratedContent",
+                }
+            ],
+        }
+    }
+    try:
+        resp = requests.post(
+            "https://api.linkedin.com/v2/assets?action=registerUpload",
+            json=register_payload,
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        upload_mech = data["value"]["uploadMechanism"]
+        upload_url = upload_mech[
+            "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"
+        ]["uploadUrl"]
+        asset_urn = data["value"]["asset"]
+        return upload_url, asset_urn
+    except KeyError as e:
+        raise IntegrationError(f"LinkedIn registerUpload response missing key: {e}")
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else "?"
+        raise IntegrationError(f"LinkedIn registerUpload failed ({status}): {str(e)[:200]}")
+
+
+def _linkedin_upload_image_binary(upload_url: str, access_token: str, image_source: str) -> None:
+    """
+    Step 2 of LinkedIn image upload: obtain image bytes and PUT them to LinkedIn's upload endpoint.
+
+    image_source can be:
+    - A public URL (https://...) → downloaded via HTTP GET
+    - A data URI  (data:image/...;base64,...) → decoded directly (Gemini output)
+
+    Raises IntegrationError on failure.
+    """
+    if image_source.startswith("data:"):
+        # Data URI from Gemini: data:<mime>;base64,<data>
+        try:
+            header, b64data = image_source.split(",", 1)
+            content_type = header.split(":")[1].split(";")[0]  # e.g. "image/png"
+            image_bytes = base64.b64decode(b64data)
+        except Exception as e:
+            raise IntegrationError(f"Failed to decode image data URI: {str(e)[:200]}")
+    else:
+        # Public URL (DALL-E etc.) — download via HTTP
+        try:
+            img_resp = requests.get(image_source, timeout=30)
+            img_resp.raise_for_status()
+            image_bytes = img_resp.content
+            content_type = img_resp.headers.get("Content-Type", "image/jpeg")
+        except Exception as e:
+            raise IntegrationError(f"Failed to download image from URL: {str(e)[:200]}")
+
+    # Upload binary to LinkedIn
+    try:
+        upload_resp = requests.put(
+            upload_url,
+            data=image_bytes,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": content_type,
+            },
+            timeout=60,
+        )
+        upload_resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else "?"
+        raise IntegrationError(f"LinkedIn image binary upload failed ({status}): {str(e)[:200]}")
+
+
+def post_to_linkedin(
+    config: LinkedInConfig,
+    post_text: str,
+    blog_url: Optional[str] = None,
+    image_url: Optional[str] = None,
+) -> dict:
     """
     Post content to LinkedIn via the UGC API.
+
+    Priority:
+      - image_url provided → register upload → upload binary → IMAGE media post
+      - blog_url provided  → ARTICLE link-preview post (LinkedIn auto-fetches OG image)
+      - neither            → plain text (NONE) post
+
     Returns dict with post URN on success.
+    Raises IntegrationError on failure.
     """
     headers = {
         "Authorization": f"Bearer {config.access_token}",
@@ -130,8 +233,20 @@ def post_to_linkedin(config: LinkedInConfig, post_text: str, blog_url: Optional[
         "shareMediaCategory": "NONE",
     }
 
-    # If blog URL provided, attach as an article
-    if blog_url:
+    if image_url:
+        # Image post: register upload → upload binary → ugcPost with asset URN
+        upload_url, asset_urn = _linkedin_register_image_upload(config)
+        _linkedin_upload_image_binary(upload_url, config.access_token, image_url)
+        share_content["shareMediaCategory"] = "IMAGE"
+        share_content["media"] = [
+            {
+                "status": "READY",
+                "media": asset_urn,
+                "title": {"text": "Blog Image"},
+            }
+        ]
+    elif blog_url:
+        # Article link-preview post
         share_content["shareMediaCategory"] = "ARTICLE"
         share_content["media"] = [
             {
@@ -181,6 +296,8 @@ def post_to_linkedin(config: LinkedInConfig, post_text: str, blog_url: Optional[
                 "LinkedIn authorization denied (403). Ensure your app has 'w_member_social' permission."
             )
         raise IntegrationError(f"LinkedIn API error ({status}): {detail or str(e)}")
+    except IntegrationError:
+        raise
     except Exception as e:
         raise IntegrationError(f"LinkedIn posting failed: {str(e)[:200]}")
 
@@ -297,10 +414,12 @@ def test_klenty_connection(config: KlentyConfig) -> dict:
 
 @dataclass
 class OutplayConfig:
-    api_key: str
-    sequence_name_a: str = "Travel Fit Sequence"    # Fit clients (score > 70)
-    sequence_name_b: str = "Warm Lead Sequence"     # Warm leads
-    sequence_name_c: str = "Cold Lead Sequence"     # Cold leads
+    client_secret: str                          # X-CLIENT-SECRET header
+    client_id: str = ""                         # ?client_id= query param
+    user_id: str = ""                           # Outplay user ID (required for sequence enrollment)
+    location: str = "us4"                       # Regional server, e.g. "us4" → us4-api.outplayhq.com
+    sequence_id_a: str = ""                     # Qualified Lead Marktech sequence (ICP score > 70)
+    sequence_id_b: str = ""                     # Personal Lead Marktech sequence (Gmail/Yahoo/etc.)
 
 
 def add_prospect_to_outplay(
@@ -308,11 +427,15 @@ def add_prospect_to_outplay(
     email: str,
     name: Optional[str],
     company: Optional[str],
-    sequence_name: str,
+    sequence_id: str,
 ) -> dict:
     """
-    Add a prospect to an Outplay sequence.
-    Returns dict with success status on success.
+    Add a prospect to an Outplay sequence using the real 2-step API:
+      Step 1 — POST /api/v1/prospect        → create prospect → returns prospectid
+      Step 2 — POST /api/v1/sequenceprospect/add → enroll prospectid in sequence
+
+    Auth: X-CLIENT-SECRET header (not x-api-key).
+    Body fields: emailid / firstname / lastname (not email / first_name / last_name).
     Raises IntegrationError on failure.
     """
     first_name = ""
@@ -322,27 +445,34 @@ def add_prospect_to_outplay(
         first_name = parts[0]
         last_name = parts[1] if len(parts) > 1 else ""
 
-    url = "https://api.outplayhq.com/api/v2/prospect"
+    location = config.location or "us4"
+    base_url = f"https://{location}-api.outplayhq.com/api/v1"
+    qs = f"?client_id={config.client_id}" if config.client_id else ""
     headers = {
-        "x-api-key": config.api_key,
+        "X-CLIENT-SECRET": config.client_secret,
         "Content-Type": "application/json",
     }
-    payload = {
-        "email": email,
-        "first_name": first_name,
-        "last_name": last_name,
-        "company": company or "",
-        "sequence_name": sequence_name,
-    }
+
+    # ── Step 1: Create / upsert prospect ─────────────────────────────
     try:
-        resp = requests.post(url, json=payload, headers=headers, timeout=20)
-        resp.raise_for_status()
-        data = resp.json()
-        return {
-            "success": True,
-            "prospect_id": data.get("id", ""),
-            "message": f"Enrolled {email} in Outplay sequence '{sequence_name}'",
-        }
+        resp1 = requests.post(
+            f"{base_url}/prospect{qs}",
+            json={
+                "emailid": email,
+                "firstname": first_name,
+                "lastname": last_name,
+                "company": company or "",
+            },
+            headers=headers,
+            timeout=20,
+        )
+        resp1.raise_for_status()
+        prospect_data = resp1.json()
+        prospect_id = prospect_data.get("prospectid")
+        if not prospect_id:
+            raise IntegrationError(
+                f"Outplay prospect created but no prospectid returned: {str(prospect_data)[:200]}"
+            )
     except requests.exceptions.ConnectionError:
         raise IntegrationError("Cannot connect to Outplay. Check your network or Outplay service status.")
     except requests.exceptions.HTTPError as e:
@@ -353,38 +483,87 @@ def add_prospect_to_outplay(
         except Exception:
             pass
         if status == 401:
-            raise IntegrationError("Outplay authentication failed (401). Check your API key.")
-        elif status == 403:
-            raise IntegrationError("Outplay authorization denied (403). Check your API key permissions.")
-        elif status == 404:
-            raise IntegrationError(
-                f"Outplay sequence '{sequence_name}' not found (404). "
-                "Check the sequence name in Settings matches exactly."
-            )
-        raise IntegrationError(f"Outplay API error ({status}): {detail or str(e)}")
+            raise IntegrationError("Outplay authentication failed (401). Check your Client Secret.")
+        if status == 403:
+            raise IntegrationError("Outplay authorization denied (403). Check your Client Secret permissions.")
+        raise IntegrationError(f"Outplay prospect creation failed ({status}): {detail or str(e)[:200]}")
+    except IntegrationError:
+        raise
     except Exception as e:
-        raise IntegrationError(f"Outplay prospect enrollment failed: {str(e)[:200]}")
+        raise IntegrationError(f"Outplay prospect creation error: {str(e)[:200]}")
+
+    # ── Step 2: Enroll prospect in sequence ───────────────────────────
+    if not sequence_id or not config.user_id:
+        return {
+            "success": True,
+            "prospect_id": prospect_id,
+            "message": (
+                f"Prospect {email} created in Outplay (id={prospect_id}) "
+                "but not enrolled in a sequence — configure Sequence ID and User ID in Settings."
+            ),
+        }
+
+    try:
+        resp2 = requests.post(
+            f"{base_url}/sequenceprospect/add{qs}",
+            json={
+                "prospectids": [int(prospect_id)],
+                "sequenceid": int(sequence_id),
+                "userid": int(config.user_id),
+            },
+            headers=headers,
+            timeout=20,
+        )
+        resp2.raise_for_status()
+        return {
+            "success": True,
+            "prospect_id": prospect_id,
+            "message": f"Prospect {email} created and enrolled in Outplay sequence {sequence_id} ✓",
+        }
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else "?"
+        detail = ""
+        try:
+            detail = e.response.json().get("message", "")
+        except Exception:
+            pass
+        if status == 401:
+            raise IntegrationError("Outplay sequence enrollment failed (401). Check your Client Secret.")
+        if status == 403:
+            raise IntegrationError("Outplay sequence enrollment denied (403). Check permissions.")
+        if status == 404:
+            raise IntegrationError(
+                f"Outplay sequence {sequence_id} or user {config.user_id} not found (404). "
+                "Check Sequence ID and User ID in Settings."
+            )
+        raise IntegrationError(f"Outplay sequence enrollment failed ({status}): {detail or str(e)[:200]}")
+    except IntegrationError:
+        raise
+    except Exception as e:
+        raise IntegrationError(f"Outplay sequence enrollment error: {str(e)[:200]}")
 
 
 def test_outplay_connection(config: OutplayConfig) -> dict:
     """
     Test Outplay connection using a HEAD request on the prospect endpoint.
-    Outplay does not expose a public GET/list endpoint — HEAD lets us verify auth
-    without creating any data. Auth is checked server-side before the method matters:
-      401 → bad key, 403 → bad permissions, anything else → key is valid.
+    Uses X-CLIENT-SECRET header. Auth is checked server-side before the method matters:
+      401 → bad secret, 403 → bad permissions, anything else → credentials are valid.
     """
-    url = "https://api.outplayhq.com/api/v2/prospect"
-    headers = {"x-api-key": config.api_key}
+    location = config.location or "us4"
+    url = f"https://{location}-api.outplayhq.com/api/v1/prospect"
+    if config.client_id:
+        url += f"?client_id={config.client_id}"
+    headers = {"X-CLIENT-SECRET": config.client_secret}
     try:
         resp = requests.head(url, headers=headers, timeout=15)
         if resp.status_code == 401:
-            return {"success": False, "message": "Invalid Outplay API key (401). Check your key."}
+            return {"success": False, "message": "Invalid Outplay Client Secret (401). Check your key."}
         if resp.status_code == 403:
-            return {"success": False, "message": "Outplay authorization denied (403). Check your API key permissions."}
+            return {"success": False, "message": "Outplay authorization denied (403). Check Client Secret permissions."}
         # 200, 404, 405 are all fine — Outplay authenticates before checking the method
         return {
             "success": True,
-            "message": "Connected to Outplay successfully. API key verified.",
+            "message": "Connected to Outplay successfully. Client Secret verified.",
         }
     except requests.exceptions.ConnectionError:
         return {"success": False, "message": "Cannot connect to Outplay. Check your network."}
@@ -394,38 +573,67 @@ def test_outplay_connection(config: OutplayConfig) -> dict:
 
 def test_linkedin_connection(config: LinkedInConfig) -> dict:
     """
-    Test LinkedIn connection by fetching the user's profile.
+    Test LinkedIn connection. Tries /v2/me first (r_liteprofile scope),
+    then falls back to /v2/userinfo (openid + profile scope from OpenID Connect product).
     """
-    headers = {
-        "Authorization": f"Bearer {config.access_token}",
-        "X-Restli-Protocol-Version": "2.0.0",
-    }
+    bearer_headers = {"Authorization": f"Bearer {config.access_token}"}
+    restli_headers = {**bearer_headers, "X-Restli-Protocol-Version": "2.0.0"}
+
+    # ── Attempt 1: /v2/me (r_liteprofile scope) ──────────────────
     try:
-        resp = requests.get(
-            "https://api.linkedin.com/v2/me",
-            headers=headers,
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        name_parts = []
-        if data.get("localizedFirstName"):
-            name_parts.append(data["localizedFirstName"])
-        if data.get("localizedLastName"):
-            name_parts.append(data["localizedLastName"])
-        name = " ".join(name_parts) or "LinkedIn User"
-        return {
-            "success": True,
-            "name": name,
-            "message": f"Connected as {name}",
-        }
-    except requests.exceptions.HTTPError as e:
-        status = e.response.status_code if e.response is not None else "?"
-        if status == 401:
-            return {"success": False, "message": "Invalid or expired access token (401)"}
-        return {"success": False, "message": f"LinkedIn returned HTTP {status}"}
-    except Exception as e:
-        return {"success": False, "message": str(e)[:200]}
+        resp = requests.get("https://api.linkedin.com/v2/me", headers=restli_headers, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            name = " ".join(filter(None, [
+                data.get("localizedFirstName", ""),
+                data.get("localizedLastName", ""),
+            ])) or "LinkedIn User"
+            person_urn = f"urn:li:person:{data['id']}" if data.get("id") else None
+            return {
+                "success": True,
+                "name": name,
+                "message": f"Connected as {name}" + (" · URN auto-filled ✓" if person_urn else ""),
+                "person_urn": person_urn,
+            }
+        if resp.status_code == 401:
+            return {"success": False, "message": "Invalid or expired access token (401)."}
+        # 403 = wrong scope → fall through to /v2/userinfo
+    except Exception:
+        pass
+
+    # ── Attempt 2: /v2/userinfo (openid + profile scope) ─────────
+    # Granted by "Sign In with LinkedIn using OpenID Connect" product
+    try:
+        resp2 = requests.get("https://api.linkedin.com/v2/userinfo", headers=bearer_headers, timeout=15)
+        if resp2.status_code == 200:
+            data2 = resp2.json()
+            name = data2.get("name") or " ".join(filter(None, [
+                data2.get("given_name", ""),
+                data2.get("family_name", ""),
+            ])) or "LinkedIn User"
+            # sub field IS the person URN: e.g. "urn:li:person:12345678"
+            person_urn = data2.get("sub") or None
+            return {
+                "success": True,
+                "name": name,
+                "message": f"Connected as {name}" + (" · URN auto-filled ✓" if person_urn else ""),
+                "person_urn": person_urn,
+            }
+        if resp2.status_code == 401:
+            return {"success": False, "message": "Invalid or expired access token (401)."}
+    except Exception:
+        pass
+
+    # ── Both failed: guide user to add the right product ─────────
+    return {
+        "success": False,
+        "message": (
+            "Token valid for posting (w_member_social) but cannot read profile to auto-fill URN. "
+            "Fix: LinkedIn Developer Portal → your app → Products tab → request "
+            "'Sign In with LinkedIn using OpenID Connect' → regenerate token with profile + w_member_social → "
+            "click Test Connection again. URN will auto-fill."
+        ),
+    }
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1017,16 +1225,17 @@ def launch_linkedin_connections(config: PhantomBusterConfig, prospects: list) ->
 
 
 def test_phantombuster_connection(config: PhantomBusterConfig) -> dict:
-    """Verify PhantomBuster API key via /api/v2/user/me."""
+    """Verify PhantomBuster API key via /api/v2/agents/fetch-all."""
     try:
         resp = requests.get(
-            "https://api.phantombuster.com/api/v2/user/me",
+            "https://api.phantombuster.com/api/v2/agents/fetch-all",
             headers={"X-Phantombuster-Key": config.api_key},
             timeout=15,
         )
         resp.raise_for_status()
         data = resp.json()
-        return {"success": True, "message": f"Connected. Account: {data.get('email', 'unknown')}"}
+        count = len(data) if isinstance(data, list) else len(data.get("agents", [])) if isinstance(data, dict) else "unknown"
+        return {"success": True, "message": f"Connected. Found {count} agent(s)."}
     except requests.exceptions.HTTPError as e:
         sc = e.response.status_code if e.response is not None else "?"
         return {"success": False, "message": f"PhantomBuster auth failed ({sc}): check your API key."}
@@ -1042,6 +1251,7 @@ def test_phantombuster_connection(config: PhantomBusterConfig) -> dict:
 class HubSpotConfig:
     access_token: str       # Private App token (starts with pat-)
     max_contacts: int = 100  # Max contacts to fetch per run
+    list_id: str = ""       # HubSpot List ID — number from objectLists/N in the URL (e.g. 9)
 
 
 _HUBSPOT_FREE_EMAIL_DOMAINS = {
@@ -1137,6 +1347,94 @@ def fetch_hubspot_contacts(config: HubSpotConfig) -> list:
     return leads
 
 
+def add_contacts_to_hubspot_list(config: HubSpotConfig, emails: list) -> dict:
+    """
+    Batch-add qualified leads to a HubSpot Static list by email address.
+    Works for leads from any source — HubSpot-fetched, manually imported, CSV, etc.
+    HubSpot matches by email; contacts not found in HubSpot go to invalidEmails (non-fatal).
+    Sends up to 500 emails per request (v1 API limit).
+    Returns {"added": N, "invalid": K, "skipped": bool}
+    """
+    if not config.list_id:
+        return {"added": 0, "invalid": 0, "skipped": True}
+    if not emails:
+        return {"added": 0, "invalid": 0, "skipped": False}
+
+    headers = {
+        "Authorization": f"Bearer {config.access_token}",
+        "Content-Type": "application/json",
+    }
+
+    BATCH_SIZE = 500
+    total_added = 0
+    total_invalid = 0
+    all_invalid_emails: set = set()
+
+    for i in range(0, len(emails), BATCH_SIZE):
+        batch = [e for e in emails[i:i + BATCH_SIZE] if e]
+        if not batch:
+            continue
+        try:
+            resp = requests.post(
+                f"https://api.hubapi.com/contacts/v1/lists/{config.list_id}/add",
+                json={"emails": batch},
+                headers=headers,
+                timeout=30,
+            )
+            if resp.status_code == 400:
+                detail = ""
+                try:
+                    detail = resp.json().get("message", "")
+                except Exception:
+                    pass
+                if "MANUAL" in (detail or "").upper() or "dynamic" in (detail or "").lower():
+                    raise IntegrationError(
+                        f"HubSpot list {config.list_id} is an Active/Segment list — "
+                        "create a Static list instead (Contacts → Lists → Create list → Static list)."
+                    )
+                raise IntegrationError(
+                    f"HubSpot list batch add rejected (400): "
+                    f"{detail or 'check List ID and ensure token has crm.lists.write scope'}"
+                )
+            resp.raise_for_status()
+            # v1 returns {"updated": [...], "discarded": [...], "invalidEmails": [...]}
+            data = resp.json()
+            total_added += len(data.get("updated", []))
+            batch_invalid = [e.lower() for e in data.get("invalidEmails", [])]
+            total_invalid += len(batch_invalid)
+            all_invalid_emails.update(batch_invalid)
+        except IntegrationError:
+            raise
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else "?"
+            if status == 401:
+                raise IntegrationError(
+                    "HubSpot list add failed (401). Check your Private App access token."
+                )
+            if status == 403:
+                raise IntegrationError(
+                    "HubSpot list access denied (403). Ensure Private App has 'crm.lists.write' scope."
+                )
+            if status == 404:
+                raise IntegrationError(
+                    f"HubSpot list {config.list_id} not found (404). "
+                    "Check the List ID matches objectLists/N in your HubSpot URL "
+                    "(e.g. objectLists/14 → enter 14)."
+                )
+            raise IntegrationError(f"HubSpot list batch add failed ({status}): {str(e)[:200]}")
+        except IntegrationError:
+            raise
+        except Exception as e:
+            raise IntegrationError(f"HubSpot list batch add error: {str(e)[:200]}")
+
+    return {
+        "added": total_added,
+        "invalid": total_invalid,
+        "invalid_emails": all_invalid_emails,
+        "skipped": False,
+    }
+
+
 def test_hubspot_connection(config: HubSpotConfig) -> dict:
     """
     Test HubSpot connection by fetching a single contact.
@@ -1168,3 +1466,170 @@ def test_hubspot_connection(config: HubSpotConfig) -> dict:
         return {"success": False, "message": f"HubSpot returned HTTP {status}"}
     except Exception as e:
         return {"success": False, "message": str(e)[:200]}
+
+
+def enroll_in_hubspot_sequence(
+    config: HubSpotConfig,
+    email: str,
+    name: Optional[str],
+    company: Optional[str],
+) -> dict:
+    """
+    Create/update a contact in HubSpot and enroll them in a Sequence.
+
+    Free tier coverage:
+      - Contact creation/update  →  FREE (any HubSpot account, CRM v3 API)
+      - Sequence enrollment      →  Requires HubSpot Sales Hub (Starter+, ~$15/seat/mo)
+
+    Private App token scopes required:
+      crm.objects.contacts.write  (contact creation)
+      sales-email-read            (sequence enrollment)
+
+    Raises IntegrationError on auth failures or API errors.
+    Returns dict with contact_id, enrolled (bool), and message.
+    """
+    headers = {
+        "Authorization": f"Bearer {config.access_token}",
+        "Content-Type": "application/json",
+    }
+
+    # ── Step 1: Parse name ───────────────────────────────────────
+    first_name, last_name = "", ""
+    if name:
+        parts = name.strip().split(" ", 1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ""
+
+    # ── Step 2: Create or find contact ───────────────────────────
+    contact_id: Optional[str] = None
+
+    # Try create first
+    try:
+        create_resp = requests.post(
+            "https://api.hubapi.com/crm/v3/objects/contacts",
+            json={
+                "properties": {
+                    "email": email,
+                    "firstname": first_name,
+                    "lastname": last_name,
+                    "company": company or "",
+                }
+            },
+            headers=headers,
+            timeout=20,
+        )
+        if create_resp.status_code == 409:
+            # Contact already exists — search by email to get their id
+            search_resp = requests.post(
+                "https://api.hubapi.com/crm/v3/objects/contacts/search",
+                json={
+                    "filters": [{"propertyName": "email", "operator": "EQ", "value": email}],
+                    "properties": ["email"],
+                    "limit": 1,
+                },
+                headers=headers,
+                timeout=20,
+            )
+            search_resp.raise_for_status()
+            results = search_resp.json().get("results", [])
+            if not results:
+                raise IntegrationError(f"HubSpot: contact {email} exists but could not be retrieved.")
+            contact_id = results[0]["id"]
+        else:
+            create_resp.raise_for_status()
+            contact_id = create_resp.json().get("id")
+    except IntegrationError:
+        raise
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else "?"
+        if status == 401:
+            raise IntegrationError("HubSpot authentication failed (401). Check your Private App access token.")
+        if status == 403:
+            raise IntegrationError(
+                "HubSpot access denied (403). Ensure your Private App has "
+                "'crm.objects.contacts.write' scope."
+            )
+        raise IntegrationError(f"HubSpot contact creation failed ({status}): {str(e)[:200]}")
+    except Exception as e:
+        raise IntegrationError(f"HubSpot contact creation error: {str(e)[:200]}")
+
+    # ── Step 3a: Set lead status — always free, triggers Workflow ───
+    # hs_lead_status = "IN_PROGRESS" is a standard HubSpot property.
+    # Create a Workflow: trigger "Lead status changes to In Progress" → send emails.
+    try:
+        requests.patch(
+            f"https://api.hubapi.com/crm/v3/objects/contacts/{contact_id}",
+            json={"properties": {"hs_lead_status": "IN_PROGRESS"}},
+            headers=headers,
+            timeout=20,
+        ).raise_for_status()
+    except Exception:
+        pass  # Non-fatal: contact was created; lead status update is best-effort
+
+    # ── Step 3b: Add to Static List via v1 API (if list_id configured) ──────
+    # list_id = the number shown in objectLists/N in the HubSpot URL (e.g. 9 or 14)
+    # v1 API uses the exact same ID visible in the browser URL — no ILS mapping needed.
+    # Note: only Static Lists support manual membership; Active/Segment lists do not.
+    if not config.list_id:
+        return {
+            "contact_id": contact_id,
+            "enrolled": False,
+            "message": (
+                f"Contact {email} created/updated in HubSpot ✓ "
+                "(no List ID configured — add it in Settings to trigger a Workflow automatically)"
+            ),
+        }
+
+    try:
+        list_resp = requests.post(
+            f"https://api.hubapi.com/contacts/v1/lists/{config.list_id}/add",
+            json={"vids": [int(contact_id)]},
+            headers=headers,
+            timeout=20,
+        )
+        if list_resp.status_code == 400:
+            detail = ""
+            try:
+                detail = list_resp.json().get("message", "")
+            except Exception:
+                pass
+            # HubSpot returns 400 when the list is an Active/Dynamic list
+            if "MANUAL" in (detail or "").upper() or "dynamic" in (detail or "").lower():
+                raise IntegrationError(
+                    f"HubSpot list {config.list_id} is an Active/Segment list — "
+                    "you can only add contacts to a Static list manually. "
+                    "In HubSpot → Contacts → Lists, create a new list and choose 'Static list' (not 'Active list')."
+                )
+            raise IntegrationError(
+                f"HubSpot list membership rejected (400): "
+                f"{detail or 'check List ID and ensure token has crm.lists.write scope'}"
+            )
+        list_resp.raise_for_status()
+        return {
+            "contact_id": contact_id,
+            "enrolled": True,
+            "message": (
+                f"Contact {email} added to HubSpot list {config.list_id} ✓ "
+                "— any Workflow triggered by this list will run automatically"
+            ),
+        }
+    except IntegrationError:
+        raise
+    except requests.exceptions.HTTPError as e:
+        status = e.response.status_code if e.response is not None else "?"
+        if status == 401:
+            raise IntegrationError(
+                "HubSpot list membership failed (401). Check your Private App access token."
+            )
+        if status == 403:
+            raise IntegrationError(
+                "HubSpot list access denied (403). Ensure your Private App has 'crm.lists.write' scope."
+            )
+        if status == 404:
+            raise IntegrationError(
+                f"HubSpot list {config.list_id} not found (404). "
+                "Check the List ID matches the number in the URL (e.g. objectLists/9 → ID is 9)."
+            )
+        raise IntegrationError(f"HubSpot list membership failed ({status}): {str(e)[:200]}")
+    except Exception as e:
+        raise IntegrationError(f"HubSpot list membership error: {str(e)[:200]}")
