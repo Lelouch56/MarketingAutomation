@@ -82,6 +82,23 @@ def _is_rate_limit_error(e: Exception) -> bool:
     )
 
 
+def _is_timeout_error(e: Exception) -> bool:
+    """Detect timeout / transient connection errors across all providers."""
+    err_str = str(e).lower()
+    type_name = type(e).__name__
+    return (
+        "timeout" in err_str
+        or "timed out" in err_str
+        or "deadline exceeded" in err_str
+        or "Timeout" in type_name
+        or "TimeoutError" in type_name
+        or "APITimeoutError" in type_name
+        or "DeadlineExceeded" in type_name
+        or "ConnectError" in type_name
+        or "ConnectionError" in type_name
+    )
+
+
 def _call_with_retry(fn, max_retries: int = 3):
     """
     Call fn() and retry up to max_retries times on rate-limit (429) errors.
@@ -108,6 +125,31 @@ def _call_with_retry(fn, max_retries: int = 3):
             raise  # Non-rate-limit error — propagate immediately
 
 
+def _call_with_timeout_retry(fn, label: str = "", max_retries: int = 3):
+    """
+    Retry fn() up to max_retries times on timeout / transient connection errors.
+    Logs a message for each retry attempt showing the attempt number.
+    Does NOT interfere with the existing 429 rate-limit retry logic inside fn().
+    Delays: 5s → 10s → 15s.
+    """
+    delays = [5, 10, 15]
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if _is_timeout_error(e) and attempt < max_retries:
+                wait = delays[attempt]
+                retry_num = attempt + 1
+                tag = f" for {label}" if label else ""
+                print(
+                    f"[LLM] Timeout error (retry {retry_num}/{max_retries}{tag}). "
+                    f"Retrying in {wait}s... ({type(e).__name__}: {str(e)[:120]})"
+                )
+                time.sleep(wait)
+                continue
+            raise  # Non-timeout error or retries exhausted — propagate
+
+
 def _call_openai(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
     try:
         from openai import OpenAI
@@ -125,7 +167,7 @@ def _call_openai(config: LLMConfig, system_prompt: str, user_prompt: str) -> str
             )
             return response.choices[0].message.content or ""
 
-        return _call_with_retry(_do)
+        return _call_with_timeout_retry(lambda: _call_with_retry(_do), label="OpenAI")
     except Exception as e:
         raise LLMError(f"OpenAI error: {e}") from e
 
@@ -148,7 +190,7 @@ def _call_gemini(config: LLMConfig, system_prompt: str, user_prompt: str) -> str
             )
             return response.text or ""
 
-        return _call_with_retry(_do)
+        return _call_with_timeout_retry(lambda: _call_with_retry(_do), label="Gemini")
     except Exception as e:
         raise LLMError(f"Gemini error: {e}") from e
 
@@ -167,7 +209,7 @@ def _call_anthropic(config: LLMConfig, system_prompt: str, user_prompt: str) -> 
             )
             return response.content[0].text or ""
 
-        return _call_with_retry(_do)
+        return _call_with_timeout_retry(lambda: _call_with_retry(_do), label="Anthropic")
     except Exception as e:
         raise LLMError(f"Anthropic error: {e}") from e
 
@@ -190,7 +232,7 @@ def _call_grok(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
             )
             return response.choices[0].message.content or ""
 
-        return _call_with_retry(_do)
+        return _call_with_timeout_retry(lambda: _call_with_retry(_do), label="Grok")
     except Exception as e:
         raise LLMError(f"Grok error: {e}") from e
 
@@ -213,7 +255,7 @@ def _call_groq(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
             )
             return response.choices[0].message.content or ""
 
-        return _call_with_retry(_do)
+        return _call_with_timeout_retry(lambda: _call_with_retry(_do), label="Groq")
     except Exception as e:
         raise LLMError(f"Groq error: {e}") from e
 
