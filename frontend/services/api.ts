@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { getLLMConfig, getLinkedInConfig, getKlentyConfig, getOutplayConfig, getApolloConfig, getSalesNavigatorConfig, getHubSpotConfig, getPhantomBusterConfig } from '../lib/storage';
+import { getLLMConfig, getLinkedInConfig, getKlentyConfig, getOutplayConfig, getApolloConfig, getSalesNavigatorConfig, getHubSpotConfig, getPhantomBusterConfig, getImageGenConfig } from '../lib/storage';
 import {
   AgentRunStatus,
   TopicRecord,
@@ -8,6 +8,7 @@ import {
   LogEntry,
   AgentMeta,
   OutreachTargetRecord,
+  RejectedProspectRecord,
   ReportRecord,
 } from '../types';
 
@@ -64,8 +65,9 @@ function buildRunRequest() {
       client_id: outplayConfig.clientId || '',
       user_id: outplayConfig.userId || '',
       location: outplayConfig.location || 'us4',
-      sequence_id_a: outplayConfig.sequenceIdA || '',   // Qualified Lead Marktech
-      sequence_id_b: outplayConfig.sequenceIdB || '',   // Personal Lead Marktech
+      sequence_id_a: outplayConfig.sequenceIdA || '',   // Qualified Lead Marktech (Agent 2)
+      sequence_id_b: outplayConfig.sequenceIdB || '',   // Personal Lead Marktech (Agent 2)
+      sequence_id_c: outplayConfig.sequenceIdC || '',   // Travel Tech Outreach (Agent 3)
     };
   }
 
@@ -75,6 +77,9 @@ function buildRunRequest() {
     body.apollo = {
       api_key: apolloConfig.apiKey,
       per_page: apolloConfig.perPage || 10,
+      sequence_id_ota: apolloConfig.sequenceIdOta || '',       // ICP1 — OTA / Travel Tech / TMC
+      sequence_id_hotels: apolloConfig.sequenceIdHotels || '', // ICP2 — Bedbank / Hotel Wholesaler / Hotel Distribution
+      email_account_id: apolloConfig.emailAccountId || '',     // Apollo mailbox for sending
     };
   }
 
@@ -106,6 +111,17 @@ function buildRunRequest() {
       connection_phantom_id: pbConfig.connectionPhantomId,
       session_cookie: pbConfig.sessionCookie,
       connections_per_launch: pbConfig.connectionsPerLaunch ?? 10,
+    };
+  }
+
+  // Attach Image Generation config if available and enabled (Agent 1 uses for LinkedIn image)
+  const imageGenConfig = getImageGenConfig();
+  if (imageGenConfig?.enabled && imageGenConfig?.apiKey) {
+    body.image_gen_config = {
+      provider: imageGenConfig.provider,
+      api_key: imageGenConfig.apiKey,
+      model: imageGenConfig.model,
+      enabled: imageGenConfig.enabled,
     };
   }
 
@@ -186,8 +202,14 @@ export const agent3Api = {
   getOutreachTargets: (): Promise<OutreachTargetRecord[]> =>
     http.get('/agents/agent3/outreach-targets').then((r) => r.data),
 
-  approveTarget: (targetId: string): Promise<{ status: string; target_id: string }> =>
-    http.post(`/agents/agent3/outreach-targets/${targetId}/approve`).then((r) => r.data),
+  approveTarget: (
+    targetId: string,
+    body?: Record<string, unknown>,
+  ): Promise<{ status: string; target_id: string; outplay_enrolled: boolean }> =>
+    http.post(`/agents/agent3/outreach-targets/${targetId}/approve`, body ?? {}).then((r) => r.data),
+
+  getRejectedProspects: (): Promise<RejectedProspectRecord[]> =>
+    http.get('/agents/agent3/rejected-prospects').then((r) => r.data),
 };
 
 // ─────────────────────────────────────────────────────────────

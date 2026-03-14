@@ -151,17 +151,20 @@ def _step3_quality_check(post_text: str, topic: str, config: LLMConfig) -> dict:
         return {"verdict": "APPROVED", "score": 75, "passed_checks": [], "failed_checks": []}
 
 
-def _step4_generate_image(topic: str, llm_config: LLMConfig) -> Optional[str]:
-    """Generate a LinkedIn illustration. Supports OpenAI (DALL-E 3) and Gemini providers."""
-    provider = llm_config.provider.lower()
-    if provider not in ("openai", "gemini"):
+def _step4_generate_image(
+    topic: str,
+    llm_config: LLMConfig,
+    image_gen_config: Optional[LLMConfig] = None,
+    post_text: str = "",
+) -> Optional[str]:
+    """Generate a LinkedIn illustration. Uses image_gen_config if provided, else falls back to llm_config.
+    Raises on failure so the caller can show the actual error in the step status."""
+    effective_config = image_gen_config if image_gen_config else llm_config
+    provider = effective_config.provider.lower()
+    if provider not in ("openai", "gemini", "ideogram"):
         return None
-    try:
-        prompt = linkedin_image_prompt(topic)
-        return generate_image(llm_config, prompt)
-    except Exception as e:
-        logger.warning("Image generation failed: %s", str(e)[:150])
-        return None
+    prompt = linkedin_image_prompt(topic, post_text)
+    return generate_image(effective_config, prompt)
 
 
 def _step5_publish_linkedin(
@@ -217,11 +220,13 @@ def _step6_save_results(
 def run_agent1_background(
     llm_config: LLMConfig,
     li_config: Optional[LinkedInConfig] = None,
+    image_gen_config: Optional[LLMConfig] = None,
 ) -> None:
     """
     Entry point for FastAPI BackgroundTasks.
-    Runs all 5 steps synchronously; updates _run_state throughout.
-    Flow: pick topic → LinkedIn copy → DALL-E image → post to LinkedIn → save.
+    Runs all 6 steps synchronously; updates _run_state throughout.
+    Flow: pick topic → LinkedIn copy → quality check → image → post to LinkedIn → save.
+    image_gen_config: optional separate config for image generation (e.g. Gemini for images while using Groq for text).
     """
     global _run_state
 
@@ -275,19 +280,34 @@ def run_agent1_background(
             _update_step(3, "warning", f"NEEDS_REVISION — Score: {score}/100 ({issues}) — publishing anyway")
         time.sleep(4)  # Throttle: stay within free-tier RPM limits
 
-        # ── Step 4: Generate LinkedIn image (DALL-E / Gemini) ────────────
-        provider = llm_config.provider.lower()
-        if provider in ("openai", "gemini"):
-            provider_label = "DALL-E 3" if provider == "openai" else "Gemini Flash"
-            _update_step(4, "running", f"Generating LinkedIn illustration via {provider_label}...")
-            image_url = _step4_generate_image(topic_dict["topic"], llm_config)
-            if image_url:
-                _update_step(4, "completed", f"Image generated via {provider_label} ✓")
+        # ── Step 4: Generate LinkedIn image (DALL-E / Gemini / Ideogram) ────────────
+        effective_img_config = image_gen_config if image_gen_config else llm_config
+        img_provider = effective_img_config.provider.lower()
+        if img_provider in ("openai", "gemini", "ideogram"):
+            if img_provider == "openai":
+                provider_label = "DALL-E 3"
+            elif img_provider == "ideogram":
+                provider_label = "Ideogram v3"
             else:
-                _update_step(4, "warning", "Image generation failed — posting text only")
+                provider_label = f"Gemini ({effective_img_config.model})"
+            source_label = " (separate image config)" if image_gen_config else ""
+            _update_step(4, "running", f"Generating LinkedIn illustration via {provider_label}{source_label}...")
+            try:
+                image_url = _step4_generate_image(
+                    topic_dict["topic"], llm_config, image_gen_config,
+                    post_text=linkedin_data.get("post_text", ""),
+                )
+                if image_url:
+                    _update_step(4, "completed", f"Image generated via {provider_label} ✓")
+                else:
+                    _update_step(4, "warning", "Image generation returned empty — posting text only")
+            except Exception as img_e:
+                logger.warning("Image generation failed: %s", str(img_e))
+                _update_step(4, "warning", f"Image failed: {str(img_e)[:250]} — posting text only")
+                image_url = None
         else:
             _update_step(4, "skipped",
-                         f"Image generation requires OpenAI or Gemini (current: {llm_config.provider})")
+                         f"Image generation requires OpenAI, Gemini, or Ideogram (current: {effective_img_config.provider})")
 
         # ── Step 5: Publish to LinkedIn ──────────────────────────────────
         img_note = " + image" if image_url else ""
@@ -295,8 +315,22 @@ def run_agent1_background(
         try:
             _step5_publish_linkedin(linkedin_data, li_config, image_url=image_url)
             _update_step(5, "completed", f"Posted to LinkedIn{img_note} successfully ✓")
-        except (ValueError, IntegrationError) as e:
+        except ValueError as e:
+            # Config error (no token, no post text) — cannot recover
             _update_step(5, "warning", str(e))
+        except IntegrationError as e:
+            if image_url:
+                # Image upload failed — retry posting text only
+                img_warn = str(e)[:150]
+                _update_step(5, "running", f"Image upload failed ({img_warn[:80]}…) — retrying text only...")
+                try:
+                    _step5_publish_linkedin(linkedin_data, li_config, image_url=None)
+                    _update_step(5, "completed", f"Posted to LinkedIn (text only — image upload failed: {img_warn[:100]})")
+                    image_url = None  # clear so step 6 saves correctly
+                except (ValueError, IntegrationError) as e2:
+                    _update_step(5, "warning", str(e2))
+            else:
+                _update_step(5, "warning", str(e))
 
         # ── Step 6: Save results ─────────────────────────────────────────
         _update_step(6, "running", "Saving results...")

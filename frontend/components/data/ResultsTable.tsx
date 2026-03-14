@@ -48,6 +48,35 @@ const BADGE_COLORS: Record<string, 'success' | 'warning' | 'error' | 'default' |
   Added: 'warning',
   // Topic source (agent1)
   web_scrape: 'info',
+  // Agent 3 company types
+  OTA: 'info',
+  Bedbank: 'warning',
+  'Hotel Wholesaler': 'default',
+  TMC: 'info',
+  'Travel Tech': 'success',
+  'Hotel Distribution': 'default',
+  // Agent 3 CRM tags
+  'Qualified Lead': 'success',
+  'Travel Tech Prospect': 'info',
+  // Agent 3 prospect status
+  pending_approval: 'warning',
+  approved: 'success',
+  // Agent 3 data sources (raw source key)
+  apollo_travel_tech: 'success',
+  apollo_and_boolean: 'success',
+  phantombuster_search: 'info',
+  boolean_search_sim: 'warning',
+  // Agent 3 lead_source (user-story label: Apollo / Boolean Search / LinkedIn)
+  Apollo: 'success',
+  'Boolean Search': 'warning',
+  LinkedIn: 'info',
+  // Agent 3 qualification_status
+  Qualified: 'success',
+  Raw: 'default',
+  // Agent 3 removal reasons (filtered-out contacts)
+  duplicate_email: 'warning',
+  off_target_role: 'error',
+  non_travel_tech: 'default',
 };
 
 function CellValue({ value, type, row }: { value: unknown; type?: string; row?: Record<string, unknown> }) {

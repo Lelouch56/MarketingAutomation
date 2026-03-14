@@ -16,6 +16,7 @@ from app.models import (
     RunAgentRequest, AgentRunStatus, TopicCreate, LeadCreate, LLMConfigModel,
     WordPressConfigModel, LinkedInConfigModel, LinkedInImageTestModel, KlentyConfigModel, OutplayConfigModel, ApolloConfigModel,
     SalesNavigatorConfigModel, HubSpotConfigModel, PhantomBusterConfigModel,
+    ApproveTargetRequest,
 )
 from app.core.llm_provider import LLMConfig
 from app.core.integrations import (
@@ -37,6 +38,7 @@ from app.agents.agent2.service import (
 from app.agents.agent3.service import (
     run_agent3_background, get_agent3_status,
     get_outreach_targets, approve_outreach_target,
+    get_rejected_prospects,
 )
 from app.agents.agent4.service import (
     run_agent4_background, get_agent4_status,
@@ -108,8 +110,9 @@ def _build_outplay_config(request: RunAgentRequest) -> Optional[OutplayConfig]:
         client_id=request.outplay.client_id,
         user_id=request.outplay.user_id,
         location=request.outplay.location,
-        sequence_id_a=request.outplay.sequence_id_a,   # Qualified Lead Marktech
-        sequence_id_b=request.outplay.sequence_id_b,   # Personal Lead Marktech
+        sequence_id_a=request.outplay.sequence_id_a,   # Qualified Lead Marktech (Agent 2)
+        sequence_id_b=request.outplay.sequence_id_b,   # Personal Lead Marktech  (Agent 2)
+        sequence_id_c=request.outplay.sequence_id_c,   # Travel Tech Outreach    (Agent 3)
     )
 
 
@@ -120,6 +123,9 @@ def _build_apollo_config(request: RunAgentRequest) -> Optional[ApolloConfig]:
     return ApolloConfig(
         api_key=request.apollo.api_key,
         per_page=request.apollo.per_page,
+        sequence_id_ota=request.apollo.sequence_id_ota,
+        sequence_id_hotels=request.apollo.sequence_id_hotels,
+        email_account_id=request.apollo.email_account_id,
     )
 
 
@@ -169,6 +175,15 @@ def run_agent1(request: RunAgentRequest, background_tasks: BackgroundTasks):
 
     config = _model_to_config(request.llm_config)
 
+    # Build separate image generation config if provided and enabled
+    image_gen_config = None
+    if request.image_gen_config and request.image_gen_config.enabled:
+        image_gen_config = LLMConfig(
+            provider=request.image_gen_config.provider,
+            api_key=request.image_gen_config.api_key,
+            model=request.image_gen_config.model,
+        )
+
     li_config = None
     if request.linkedin:
         li_config = LinkedInConfig(
@@ -176,9 +191,12 @@ def run_agent1(request: RunAgentRequest, background_tasks: BackgroundTasks):
             author_urn=request.linkedin.author_urn,
         )
 
-    background_tasks.add_task(run_agent1_background, config, li_config)
+    background_tasks.add_task(run_agent1_background, config, li_config, image_gen_config)
     _append_log("info", "Agent 1 started by user", agent_id="agent1",
-                metadata={"provider": config.provider, "model": config.model})
+                metadata={
+                    "provider": config.provider, "model": config.model,
+                    "image_gen_provider": image_gen_config.provider if image_gen_config else None,
+                })
     return {"status": "started", "message": "Agent 1 (Hangout Social) has started."}
 
 
@@ -504,13 +522,41 @@ def list_outreach_targets():
 
 
 @router.post("/agents/agent3/outreach-targets/{target_id}/approve")
-def approve_target(target_id: str):
-    """Approve a prospect for Klenty outreach."""
-    found = approve_outreach_target(target_id)
-    if not found:
+def approve_target(target_id: str, body: ApproveTargetRequest = ApproveTargetRequest()):
+    """Approve a prospect for outreach.
+    Optionally accepts Outplay config in the request body to enroll the prospect
+    immediately without requiring a full agent re-run.
+    """
+    outplay_config = None
+    if body.outplay:
+        outplay_config = OutplayConfig(
+            client_secret=body.outplay.client_secret,
+            client_id=body.outplay.client_id,
+            user_id=body.outplay.user_id,
+            location=body.outplay.location,
+            sequence_id_a=body.outplay.sequence_id_a,
+            sequence_id_b=body.outplay.sequence_id_b,
+            sequence_id_c=body.outplay.sequence_id_c,
+        )
+
+    result = approve_outreach_target(target_id, outplay_config)
+    if not result["found"]:
         raise HTTPException(status_code=404, detail=f"Outreach target '{target_id}' not found.")
-    _append_log("info", f"Outreach target {target_id[:8]}... approved", agent_id="agent3")
-    return {"status": "approved", "target_id": target_id}
+
+    enrolled = result["outplay_enrolled"]
+    _append_log(
+        "info",
+        f"Outreach target {target_id[:8]}... approved"
+        + (" and enrolled in Outplay" if enrolled else " (Outplay enrollment pending — add config in Settings)"),
+        agent_id="agent3",
+    )
+    return {"status": "approved", "target_id": target_id, "outplay_enrolled": enrolled}
+
+
+@router.get("/agents/agent3/rejected-prospects")
+def list_rejected_prospects():
+    """Return all prospects removed during Step 4 data cleaning."""
+    return get_rejected_prospects()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -569,11 +615,11 @@ def list_agents():
         {
             "id": "agent3",
             "name": "Matters broad",
-            "description": "Reads Matters hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved prospects.",
+            "description": "Scalable outbound lead generation for travel tech companies dealing with hotel data normalization. Discovers OTA / Bedbank / Wholesaler / TMC decision-makers (CTO, VP Eng, Head of Product, Supply/Content/Connectivity Manager) via Apollo + Boolean search, collects and validates contact data, AI-qualifies leads by role and company type, uploads to Matters Board CRM with Qualified Lead / Travel Tech Prospect tags, and launches Outplay 4-email sequences (Day 1 Intro → Day 3 → Day 7 → Day 14 Final).",
             "type": "Outreach Automation",
             "schedule": "6x Daily",
             "status": a3.status,
-            "steps_count": 8,
+            "steps_count": 6,
             "last_run": a3.completed_at,
             "implemented": True,
         },

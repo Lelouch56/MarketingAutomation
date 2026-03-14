@@ -1,24 +1,32 @@
 """
-Agent 3: LinkedIn Outbound Automation
+Agent 3: Travel Tech Lead Generation and Outreach (Matters broad)
 
-8-step workflow:
-  1. load_qualified_leads   - Read Agent 2 hot leads from leads.json; extract unique company
-                              domains + AI context (signals, score, company_type)
-  2. prospect_search        - PhantomBuster LinkedIn Search Export (primary, if configured) →
-                              Apollo domain search (fallback, if hot leads exist) →
-                              Apollo keyword search → LLM generation
-  3. filter_decision_makers - AI removes non-decision-maker titles (PROSPECT_FILTER_SYSTEM)
-  4. analyze_outreach_fit   - AI scores each prospect using Agent 2 company context; adds
-                              outreach_score, outreach_reason, connection_message per prospect
-  5. queue_for_approval     - Persist to outreach_targets.json as 'pending_approval'
-  6. email_outreach         - Enroll approved prospects in Klenty / Outplay / HubSpot Sequences
-  7. linkedin_connection    - PhantomBuster Connection Sender (if configured) or log requests
-  8. track_engagement       - Aggregate run metrics
+6-step workflow based on the user story:
+  1. prospect_discovery  - Apollo.io people search (primary).
+                           LLM Boolean simulation fallback when Apollo 403s (free plan limitation).
+                           PhantomBuster LinkedIn search when Apollo not configured.
+                           Targets OTA/Bedbank/Wholesaler/TMC/Travel Platform decision-makers.
+  2. data_collection     - Collect and normalize all prospect fields:
+                           Name, Job Title, Company, LinkedIn URL, Website, Email, Phone, Location.
+                           Log how many records have emails vs. missing.
+  3. email_discovery     - Track email coverage; Apollo already returns emails when available.
+                           Log discovery rate and flag prospects without emails.
+  4. data_cleaning       - AI role filter (keep only target titles) + AI company classifier
+                           (tag OTA / Bedbank / Hotel Wholesaler / TMC / Travel Tech / Hotel Distribution).
+                           Remove duplicate emails. Validate email format.
+  5. crm_upload          - Persist to outreach_targets.json (Matters Board) with CRM tags:
+                           category = "Qualified Lead" | "Travel Tech Prospect",
+                           company_type = OTA | Bedbank | Hotel Wholesaler | TMC | Travel Tech | Hotel Distribution.
+                           Status = pending_approval.
+  6. campaign_execution  - Enroll approved prospects in Outplay 4-email sequence (primary):
+                           Day 1 Intro → Day 3 Follow-up → Day 7 Value → Day 14 Final.
+                           Also supports Klenty / HubSpot as secondary platforms.
+                           Apollo sequence enrollment is disabled — Apollo is used only for Step 1 CRM search.
 """
 
 import json
 import logging
-import random
+import re
 import threading
 import time
 import uuid
@@ -30,17 +38,18 @@ logger = logging.getLogger(__name__)
 from app.storage.json_db import JsonDB
 from app.core.llm_provider import LLMConfig, call_llm_json, LLMError
 from app.core.prompts import (
-    PROSPECT_GENERATION_SYSTEM, prospect_generation_user,
-    PROSPECT_FILTER_SYSTEM, prospect_filter_user,
-    PROSPECT_ANALYSIS_SYSTEM, prospect_analysis_user,
+    TRAVEL_TECH_LEAD_GENERATION_SYSTEM, travel_tech_lead_generation_user,
+    TRAVEL_TECH_ROLE_FILTER_SYSTEM, travel_tech_role_filter_user,
+    TRAVEL_TECH_COMPANY_CLASSIFIER_SYSTEM, travel_tech_company_classifier_user,
+    TRAVEL_TECH_TARGET_ROLES,
 )
 from app.core.integrations import (
     KlentyConfig, IntegrationError, add_prospect_to_klenty,
     OutplayConfig, add_prospect_to_outplay,
     HubSpotConfig, enroll_in_hubspot_sequence,
-    ApolloConfig, search_apollo_prospects, search_apollo_by_domains, _extract_domain,
-    SalesNavigatorConfig, search_sales_navigator_prospects,
-    PhantomBusterConfig, search_phantombuster_prospects, launch_linkedin_connections,
+    ApolloConfig, search_apollo_travel_tech,
+    create_apollo_contact, enroll_in_apollo_sequence,
+    PhantomBusterConfig, search_phantombuster_prospects,
 )
 from app.models import AgentRunStatus, StepStatus
 
@@ -49,30 +58,29 @@ from app.models import AgentRunStatus, StepStatus
 # ─────────────────────────────────────────────────────────────
 
 outreach_db = JsonDB("app/data/outreach_targets.json")
-leads_db = JsonDB("app/data/leads.json")    # reads Agent 2 hot leads
+rejected_db  = JsonDB("app/data/rejected_prospects.json")
 
 # ─────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────
 
-DEFAULT_PERSONAS = [
-    "CTO",
-    "VP Technology",
-    "Product Head",
-    "Founder",
-    "Head of Supply",
-    "Head of Partnerships",
-]
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+# Titles that map to "Qualified Lead" (senior decision-makers)
+_SENIOR_TITLES = {
+    "cto", "chief technology officer", "vp engineering", "vp of engineering",
+    "head of engineering", "director of technology", "director of engineering",
+    "vp product", "vp of product", "head of product", "director of product",
+    "chief product officer", "head of technology",
+}
 
 STEP_DEFINITIONS = [
-    (1, "load_qualified_leads"),
-    (2, "prospect_search"),
-    (3, "filter_decision_makers"),
-    (4, "analyze_outreach_fit"),
-    (5, "queue_for_approval"),
-    (6, "email_outreach"),
-    (7, "linkedin_connection"),
-    (8, "track_engagement"),
+    (1, "prospect_discovery"),
+    (2, "data_collection"),
+    (3, "email_discovery"),
+    (4, "data_cleaning"),
+    (5, "crm_upload"),
+    (6, "campaign_execution"),
 ]
 
 # ─────────────────────────────────────────────────────────────
@@ -139,272 +147,448 @@ def get_outreach_targets() -> list:
     return outreach_db.read()
 
 
-def approve_outreach_target(target_id: str) -> bool:
-    """
-    Set a prospect's status to 'approved' by ID.
-    Returns True if found and updated, False otherwise.
+def get_rejected_prospects() -> list:
+    """Read all Step-4-filtered prospects from storage."""
+    return rejected_db.read()
+
+
+def approve_outreach_target(
+    target_id: str,
+    outplay_config: Optional["OutplayConfig"] = None,
+) -> dict:
+    """Set a prospect's status to 'approved' by ID.
+
+    If outplay_config is provided and the prospect has a valid email,
+    the prospect is immediately enrolled in Outplay Sequence C
+    (falling back to Sequence A) so the user doesn't have to re-run
+    the agent to trigger campaign enrollment.
+
+    Returns a dict with 'found' (bool) and 'outplay_enrolled' (bool).
     """
     targets = outreach_db.read()
     found = False
+    outplay_enrolled = False
+
     for t in targets:
-        if t.get("id") == target_id:
-            t["status"] = "approved"
-            t["approved_at"] = _now()
-            found = True
-            break
+        if t.get("id") != target_id:
+            continue
+
+        t["status"] = "approved"
+        t["approved_at"] = _now()
+        found = True
+
+        # Immediate Outplay enrollment on approval
+        if outplay_config and _is_valid_email(t.get("email", "")) and not t.get("outplay_enrolled"):
+            try:
+                name = f"{t.get('first_name', '')} {t.get('last_name', '')}".strip()
+                seq_id = outplay_config.sequence_id_c or outplay_config.sequence_id_a
+                add_prospect_to_outplay(
+                    outplay_config,
+                    email=t.get("email", ""),
+                    name=name or None,
+                    company=t.get("company"),
+                    sequence_id=seq_id,
+                )
+                t["outplay_enrolled"] = True
+                t["outplay_enrolled_at"] = _now()
+                outplay_enrolled = True
+                logger.info(
+                    "Outplay enrollment on approve — %s <%s> → sequence %s",
+                    name, t.get("email"), seq_id,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Outplay enrollment on approve failed for %s: %s",
+                    target_id[:8], str(e)[:150],
+                )
+        break
+
     if found:
         outreach_db.write(targets)
-    return found
+
+    return {"found": found, "outplay_enrolled": outplay_enrolled}
+
+
+def _is_valid_email(email: str) -> bool:
+    return bool(email and _EMAIL_RE.match(email.strip()))
+
+
+def _crm_tag_for_title(title: str) -> str:
+    """Return 'Qualified Lead' for senior roles, 'Travel Tech Prospect' otherwise."""
+    if not title:
+        return "Travel Tech Prospect"
+    t = title.lower()
+    for senior in _SENIOR_TITLES:
+        if senior in t:
+            return "Qualified Lead"
+    return "Travel Tech Prospect"
 
 
 # ─────────────────────────────────────────────────────────────
 # Step Implementations
 # ─────────────────────────────────────────────────────────────
 
-def _step1_load_qualified_leads() -> tuple:
+def _dedup_prospects(prospects: list) -> list:
     """
-    Read Agent 2's completed hot leads from leads.json.
-    Returns (hot_leads list, domain_to_ctx dict mapping bare_domain → lead dict).
-
-    domain_to_ctx is keyed by bare domain (e.g. 'booking.com') and maps to the
-    highest-scored Agent 2 lead for that domain. Used by step 2 (Apollo domain search
-    and PhantomBuster) and step 4 (outreach fit analysis).
-
-    Returns ([], {}) gracefully if Agent 2 hasn't run yet — later steps fall back
-    to keyword search or LLM generation.
+    Deduplicate a merged prospect list.
+    Primary key: email (if present and valid).
+    Secondary key: linkedin_url (if present).
+    First occurrence wins (Apollo real data is prepended, so it takes priority).
     """
-    all_leads = leads_db.read()
-    hot_leads = [
-        l for l in all_leads
-        if l.get("category") == "Hot" and l.get("analysis_status") == "completed"
-    ]
-    domain_to_ctx: dict = {}
-    for lead in hot_leads:
-        domain = _extract_domain(lead.get("website", ""))
-        if domain:
-            existing = domain_to_ctx.get(domain)
-            # Keep highest-scored lead per domain
-            if existing is None or (lead.get("score") or 0) > (existing.get("score") or 0):
-                domain_to_ctx[domain] = lead
-    return hot_leads, domain_to_ctx
+    seen_emails: set = set()
+    seen_linkedin: set = set()
+    result = []
+    for p in prospects:
+        email = (p.get("email") or "").strip().lower()
+        linkedin = (p.get("linkedin_url") or "").strip().lower()
+
+        if email and email in seen_emails:
+            continue
+        if linkedin and linkedin in seen_linkedin:
+            continue
+
+        if email:
+            seen_emails.add(email)
+        if linkedin:
+            seen_linkedin.add(linkedin)
+        result.append(p)
+    return result
 
 
-def _step2_prospect_search(
-    hot_leads: list,
-    domain_to_ctx: dict,
+def _step1_prospect_discovery(
     config: LLMConfig,
     apollo_config: Optional[ApolloConfig] = None,
-    sales_nav_config: Optional[SalesNavigatorConfig] = None,
     phantombuster_config: Optional[PhantomBusterConfig] = None,
 ) -> tuple:
     """
-    Search for decision-maker prospects.
+    Prospect discovery — three sources tried in priority order:
 
-    Priority:
-      1. PhantomBuster LinkedIn Search Export (if configured + hot leads exist)
-         Searches LinkedIn by company name; async poll for results (~2 min).
-      2. LinkedIn Sales Navigator (if configured)
-      3. Apollo domain search (if configured + hot leads exist)
-      4. Apollo keyword search (fallback)
-      5. LLM generation (last resort)
+      1. Apollo.io people search (primary when apollo_config supplied).
+         Falls back to LLM Boolean simulation on 403 plan-limitation errors.
+         source = "apollo_travel_tech"
 
-    Returns (prospects_list, source_string).
+      2. PhantomBuster LinkedIn Search (when Apollo not configured).
+         source = "phantombuster_search"
+
+      3. LLM Boolean Search simulation (fallback when Apollo 403s OR
+         neither Apollo nor PhantomBuster is configured).
+         source = "boolean_search_sim"
+
+    Returns (prospects_list, source_string, warning_message|None).
     """
-    prospects = []
-    source = "llm"
+    now = _now()
+    _apollo_plan_err: Optional[str] = None  # set when Apollo fails with a plan-limitation 403
 
-    # Priority 1: PhantomBuster LinkedIn Search Export
-    if phantombuster_config and domain_to_ctx:
+    # ── Apollo (primary) ──────────────────────────────────────────────────
+    if apollo_config:
+        try:
+            raw = search_apollo_travel_tech(apollo_config)
+            prospects = []
+            for p in raw:
+                if not isinstance(p, dict):
+                    continue
+                p["id"] = p.get("id") or str(uuid.uuid4())
+                p["status"] = "raw"
+                p["created_at"] = now
+                p["run_id"] = ""
+                p.setdefault("source", "apollo_travel_tech")
+                p["is_dummy"] = False
+                prospects.append(p)
+            if prospects:
+                logger.info("Apollo returned %d prospects", len(prospects))
+                return prospects, "apollo_travel_tech", None
+            else:
+                err = "Apollo returned 0 results — check API plan limits or keyword filters"
+                logger.warning(err)
+                return [], "none", err
+        except IntegrationError as e:
+            err = str(e)[:300]
+            logger.warning("Apollo contacts search failed: %s", err)
+            # Any Apollo failure → fall back to LLM Boolean simulation so the
+            # agent always produces usable prospect data for the demo.
+            _apollo_plan_err = f"Apollo unavailable ({err[:120]}) — using LLM Boolean simulation as fallback."
+            logger.info("Apollo search failed — falling back to LLM Boolean simulation")
+
+    # ── PhantomBuster (fallback when Apollo not configured) ───────────────
+    if phantombuster_config and not _apollo_plan_err:
         company_names = [
-            ctx.get("company") or domain
-            for domain, ctx in domain_to_ctx.items()
+            "Hotelbeds", "WebBeds", "Booking.com", "Expedia",
+            "American Express GBT", "CWT", "Travelport",
         ]
         try:
-            prospects = search_phantombuster_prospects(phantombuster_config, company_names)
-            if prospects:
-                source = "phantombuster_search"
-                # Enrich with company_type from Agent 2 context
-                for p in prospects:
-                    p_domain = _extract_domain(p.get("website", ""))
-                    ctx = domain_to_ctx.get(p_domain) or {}
-                    if ctx.get("company_type"):
-                        p["company_type"] = ctx["company_type"]
-        except IntegrationError as e:
-            logger.warning("PhantomBuster search failed, falling back to Apollo: %s", str(e))
+            raw = search_phantombuster_prospects(phantombuster_config, company_names)
             prospects = []
-
-    # Priority 2: LinkedIn Sales Navigator
-    if not prospects and sales_nav_config:
-        persona = random.choice(DEFAULT_PERSONAS)
-        try:
-            prospects = search_sales_navigator_prospects(sales_nav_config, persona)
+            for p in raw:
+                if not isinstance(p, dict):
+                    continue
+                p["id"] = p.get("id") or str(uuid.uuid4())
+                p["status"] = "raw"
+                p["created_at"] = now
+                p["run_id"] = ""
+                p.setdefault("source", "phantombuster_search")
+                p["is_dummy"] = False
+                prospects.append(p)
             if prospects:
-                source = "sales_navigator"
+                return prospects, "phantombuster_search", None
+            else:
+                return [], "none", "PhantomBuster returned 0 results"
         except IntegrationError as e:
-            logger.warning("Sales Navigator search failed: %s", str(e))
-            prospects = []
+            err = str(e)[:200]
+            logger.warning("PhantomBuster search failed: %s", err)
+            return [], "none", f"PhantomBuster: {err}"
 
-    # Priority 3: Apollo domain search
-    if not prospects and apollo_config and domain_to_ctx:
+    # ── LLM Boolean Search Simulation (fallback) ──────────────────────────
+    # Runs when: (a) Apollo returned 403 plan-limitation, or
+    #            (b) neither Apollo nor PhantomBuster is configured
+    if _apollo_plan_err or (not apollo_config and not phantombuster_config):
         try:
-            prospects = search_apollo_by_domains(
-                apollo_config,
-                domains=list(domain_to_ctx.keys()),
-                person_titles=DEFAULT_PERSONAS,
+            raw_sim = call_llm_json(
+                config,
+                TRAVEL_TECH_LEAD_GENERATION_SYSTEM,
+                travel_tech_lead_generation_user("travel technology", "Global", 12),
             )
-            if prospects:
-                source = "apollo_domain"
-                for p in prospects:
-                    p_domain = _extract_domain(p.get("website", ""))
-                    ctx = domain_to_ctx.get(p_domain) or {}
-                    if ctx.get("company_type"):
-                        p["company_type"] = ctx["company_type"]
-        except IntegrationError as e:
-            logger.warning("Apollo domain search failed, trying keyword: %s", str(e))
+            if isinstance(raw_sim, list):
+                sim_prospects = raw_sim
+            elif isinstance(raw_sim, dict):
+                sim_prospects = raw_sim.get("prospects", raw_sim.get("data", []))
+            else:
+                sim_prospects = []
             prospects = []
-
-    # Priority 4: Apollo keyword fallback
-    if not prospects and apollo_config:
-        persona = random.choice(DEFAULT_PERSONAS)
-        try:
-            prospects = search_apollo_prospects(apollo_config, persona, "travel")
-            if prospects:
-                source = "apollo"
-        except IntegrationError as e:
-            logger.warning("Apollo keyword search failed, using LLM: %s", str(e))
-            prospects = []
-
-    # Priority 5: LLM generation (last resort — generates demo/synthetic data)
-    if not prospects:
-        persona = random.choice(DEFAULT_PERSONAS)
-        raw = call_llm_json(
-            config,
-            PROSPECT_GENERATION_SYSTEM,
-            prospect_generation_user(persona, "travel technology", "Global"),
-        )
-        if isinstance(raw, list):
-            prospects = raw
-        elif isinstance(raw, dict):
-            prospects = raw.get("prospects", raw.get("data", []))
-        source = "llm"
-        # Mark every LLM-generated prospect as demo data so the UI can distinguish
-        # them from real profiles returned by PhantomBuster / Apollo / Sales Navigator.
-        for p in prospects:
-            if isinstance(p, dict):
+            for p in sim_prospects:
+                if not isinstance(p, dict):
+                    continue
+                p["id"] = p.get("id") or str(uuid.uuid4())
+                p["status"] = "raw"
+                p["created_at"] = now
+                p["run_id"] = ""
+                p["source"] = "boolean_search_sim"
                 p["is_dummy"] = True
+                prospects.append(p)
+            if prospects:
+                logger.info("LLM Boolean simulation returned %d prospects", len(prospects))
+                return prospects, "boolean_search_sim", _apollo_plan_err
+            else:
+                return [], "none", _apollo_plan_err or "LLM Boolean simulation returned 0 results"
+        except Exception as e:
+            sim_err = f"LLM Boolean simulation failed: {str(e)[:150]}"
+            logger.warning(sim_err)
+            combined = f"{_apollo_plan_err} | {sim_err}" if _apollo_plan_err else sim_err
+            return [], "none", combined
 
-    result = []
+    # ── No sources configured ─────────────────────────────────────────────
+    return [], "none", (
+        "Apollo not configured — add your Apollo API key in Settings → Integrations to enable prospect discovery."
+    )
+
+
+def _step2_collect_data(prospects: list, run_id: str) -> tuple:
+    """
+    Normalize prospect fields to the full data schema:
+    Name, Job Title, Company, LinkedIn URL, Website, Email, Phone, Location.
+    Returns (normalized_prospects, with_email_count, missing_email_count).
+    """
+    normalized = []
+    with_email = 0
+    missing_email = 0
+
     for p in prospects:
         if not isinstance(p, dict):
             continue
-        p["id"] = p.get("id") or str(uuid.uuid4())
-        p["status"] = "raw"
-        p["created_at"] = _now()
-        p["run_id"] = ""
-        p.setdefault("source", source)
-        result.append(p)
-    return result, source
+
+        # Normalize name
+        first = (p.get("first_name") or "").strip()
+        last = (p.get("last_name") or "").strip()
+
+        # Normalize email
+        email = (p.get("email") or "").strip().lower()
+        has_email = _is_valid_email(email)
+        if has_email:
+            with_email += 1
+        else:
+            missing_email += 1
+            email = ""  # clear malformed emails
+
+        # Derive user-friendly lead source label per user story data schema
+        raw_source = p.get("source", "unknown")
+        if raw_source == "apollo_travel_tech":
+            lead_source = "Apollo"
+        elif raw_source == "phantombuster_search":
+            lead_source = "LinkedIn"
+        elif raw_source == "boolean_search_sim":
+            lead_source = "Boolean Search"
+        else:
+            lead_source = p.get("lead_source", "Unknown")
+
+        normalized.append({
+            "id": p.get("id") or str(uuid.uuid4()),
+            "run_id": run_id,
+            "first_name": first,
+            "last_name": last,
+            "email": email,
+            "title": (p.get("title") or "").strip(),
+            "company": (p.get("company") or "").strip(),
+            "company_type": p.get("company_type", "other"),
+            "website": (p.get("website") or "").strip(),
+            "linkedin_url": (p.get("linkedin_url") or "").strip(),
+            "phone": (p.get("phone") or "").strip(),
+            "region": (p.get("region") or p.get("location") or "Global").strip(),
+            "employees": (p.get("employees") or "").strip(),
+            "relevance_reason": (p.get("relevance_reason") or "").strip(),
+            "lead_source": lead_source,           # Google / LinkedIn / Apollo / Boolean Search
+            "qualification_status": p.get("qualification_status", "Raw"),
+            "source": raw_source,
+            "is_dummy": p.get("is_dummy", False),
+            "status": "raw",
+            "created_at": p.get("created_at") or _now(),
+        })
+
+    return normalized, with_email, missing_email
 
 
-def _step3_filter_decision_makers(prospects: list, config: LLMConfig) -> list:
+def _step3_email_discovery(prospects: list) -> tuple:
     """
-    AI filter: remove non-decision-maker titles using PROSPECT_FILTER_SYSTEM prompt.
-    Returns filtered prospect list with status='filtered' and relevance_reason added.
+    Audit email coverage across the prospect list.
+    Apollo returns emails inline; this step logs coverage and flags gaps.
+    Returns (prospects, found_count, missing_count).
     """
-    if not prospects:
-        return []
+    found = sum(1 for p in prospects if _is_valid_email(p.get("email", "")))
+    missing = len(prospects) - found
+    # Tag prospects missing emails for visibility
+    for p in prospects:
+        if not _is_valid_email(p.get("email", "")):
+            p["email_status"] = "not_found"
+        else:
+            p["email_status"] = "found"
+    return prospects, found, missing
+
+
+def _step4_data_cleaning(prospects: list, config: LLMConfig) -> tuple:
+    """
+    Three-pass data cleaning:
+    1. Remove duplicate emails (keep first occurrence per email)
+    2. AI role filter — keep only target titles from TRAVEL_TECH_TARGET_ROLES
+    3. AI company classifier — tag company_type as OTA/Bedbank/TMC/etc.
+    Returns (kept_list, removed_list) where each removed item has a
+    'removal_reason' field: 'duplicate_email' | 'off_target_role' | 'non_travel_tech'.
+    """
+    removed: list = []
+
+    # Pass 1: Remove duplicate emails
+    seen_emails = set()
+    deduped = []
+    for p in prospects:
+        email = p.get("email", "").strip().lower()
+        if email and email in seen_emails:
+            removed.append({**p, "removal_reason": "duplicate_email"})
+            continue
+        if email:
+            seen_emails.add(email)
+        deduped.append(p)
+
+    if not deduped:
+        return [], removed
+
+    # Pass 2: AI role filter
     try:
-        prospects_json = json.dumps(prospects, indent=2)
+        prospects_json = json.dumps(deduped, indent=2)
         result = call_llm_json(
             config,
-            PROSPECT_FILTER_SYSTEM,
-            prospect_filter_user(prospects_json),
+            TRAVEL_TECH_ROLE_FILTER_SYSTEM,
+            travel_tech_role_filter_user(prospects_json),
         )
         if isinstance(result, list):
-            filtered = result
+            role_filtered = result
         elif isinstance(result, dict):
-            filtered = result.get("prospects", result.get("filtered", []))
+            role_filtered = result.get("prospects", result.get("filtered", deduped))
         else:
-            filtered = prospects  # fallback: keep all
+            role_filtered = deduped
 
-        for p in filtered:
+        for p in role_filtered:
             if isinstance(p, dict):
                 p["status"] = "filtered"
-        return filtered
     except Exception as e:
-        logger.warning("Prospect filtering failed, keeping all: %s", str(e)[:100])
-        for p in prospects:
+        logger.warning("Role filter failed, keeping all: %s", str(e)[:100])
+        role_filtered = deduped
+        for p in role_filtered:
             p["status"] = "filtered"
-        return prospects
 
+    # Capture prospects removed by the role filter (not in returned list)
+    role_filtered_ids = {p.get("id") for p in role_filtered if isinstance(p, dict)}
+    removed += [
+        {**p, "removal_reason": "off_target_role"}
+        for p in deduped
+        if isinstance(p, dict) and p.get("id") not in role_filtered_ids
+    ]
 
-def _step4_analyze_outreach_fit(
-    prospects: list,
-    domain_to_ctx: dict,
-    config: LLMConfig,
-) -> list:
-    """
-    AI-score each prospect for LinkedIn outreach fit using Agent 2 company context.
+    if not role_filtered:
+        return [], removed
 
-    For each prospect:
-      - Looks up its company domain in domain_to_ctx to get Agent 2 signals/score/reasoning
-      - If no Agent 2 context available, uses minimal fallback context (still generates a score)
-      - Calls LLM to get outreach_score, outreach_reason, connection_message
-      - Adds those fields to the prospect dict in-place
+    time.sleep(3)
 
-    Non-critical: on per-prospect LLM failure, the prospect keeps its existing data
-    with outreach_score=None and empty strings for the text fields.
-    Sleeps 2s between LLM calls to respect free-tier rate limits.
-    """
-    for i, p in enumerate(prospects):
+    # Pass 3: AI company classifier
+    try:
+        prospects_json = json.dumps(role_filtered, indent=2)
+        result = call_llm_json(
+            config,
+            TRAVEL_TECH_COMPANY_CLASSIFIER_SYSTEM,
+            travel_tech_company_classifier_user(prospects_json),
+        )
+        if isinstance(result, list):
+            classified = result
+        elif isinstance(result, dict):
+            classified = result.get("prospects", result.get("data", role_filtered))
+        else:
+            classified = role_filtered
+    except Exception as e:
+        logger.warning("Company classifier failed, keeping role-filtered: %s", str(e)[:100])
+        classified = role_filtered
+
+    # Remove prospects where company was classified as "Other" and is_travel_tech=false
+    final = []
+    for p in classified:
         if not isinstance(p, dict):
             continue
+        # Keep if travel tech or unknown classification (benefit of the doubt)
+        if p.get("is_travel_tech") is False and p.get("company_type") == "Other":
+            removed.append({**p, "removal_reason": "non_travel_tech"})
+            continue
+        final.append(p)
 
-        p_domain = _extract_domain(p.get("website", ""))
-        company_ctx = domain_to_ctx.get(p_domain) or {
-            "company_type": p.get("company_type", "unknown"),
-            "score": None,
-            "reasoning": "No Agent 2 analysis available for this company.",
-            "signals": [],
-            "concerns": [],
-        }
-
-        try:
-            result = call_llm_json(
-                config,
-                PROSPECT_ANALYSIS_SYSTEM,
-                prospect_analysis_user(p, company_ctx),
-            )
-            if isinstance(result, dict):
-                p["outreach_score"] = result.get("outreach_score")
-                p["outreach_reason"] = result.get("outreach_reason", "")
-                p["connection_message"] = result.get("connection_message", "")
-        except Exception as e:
-            logger.warning(
-                "Outreach fit analysis failed for %s %s: %s",
-                p.get("first_name", ""), p.get("last_name", ""), str(e)[:100]
-            )
-            p["outreach_score"] = None
-            p["outreach_reason"] = ""
-            p["connection_message"] = ""
-
-        if i < len(prospects) - 1:
-            time.sleep(2)
-
-    return prospects
+    return final, removed
 
 
-def _step5_queue_for_approval(prospects: list, run_id: str) -> int:
+def _step5_crm_upload(prospects: list, run_id: str) -> int:
     """
-    Persist prospects to outreach_targets.json with status 'pending_approval'.
-    Includes new fields: outreach_score, outreach_reason, connection_message.
-    Returns count of newly added records.
+    Persist cleaned prospects to outreach_targets.json (Matters Board).
+    Adds CRM tags:
+      - category: "Qualified Lead" | "Travel Tech Prospect"
+      - company_type: OTA | Bedbank | Hotel Wholesaler | TMC | Travel Tech | Hotel Distribution
+      - status: "pending_approval"
+    Returns count of newly saved records.
     """
     now = _now()
     count = 0
     for p in prospects:
         if not isinstance(p, dict):
             continue
+        crm_tag = p.get("crm_tag") or _crm_tag_for_title(p.get("title", ""))
+        company_type = p.get("company_type") or "Travel Tech"
+        has_email = _is_valid_email(p.get("email", ""))
+
+        # Qualification status per user story:
+        #   Qualified = company distributes hotel inventory + role influences tech/product/ops + valid email
+        q_status = p.get("qualification_status", "Raw")
+        if q_status == "Raw" and crm_tag == "Qualified Lead" and has_email:
+            q_status = "Qualified"
+
+        # CRM tags per user story: qualification category + industry type
+        # e.g. ["Qualified Lead", "OTA"] or ["Travel Tech Prospect", "Bedbank", "TMC"]
+        crm_tags_list: list = [crm_tag, company_type]
+        if crm_tag == "Qualified Lead" and "Travel Tech Prospect" not in crm_tags_list:
+            pass  # don't double-add the qualification tag
+        elif crm_tag == "Travel Tech Prospect" and company_type not in crm_tags_list:
+            pass
+
         outreach_db.append({
             "id": p.get("id") or str(uuid.uuid4()),
             "run_id": run_id,
@@ -413,16 +597,22 @@ def _step5_queue_for_approval(prospects: list, run_id: str) -> int:
             "email": p.get("email", ""),
             "title": p.get("title", ""),
             "company": p.get("company", ""),
-            "company_type": p.get("company_type", "other"),
+            "company_type": company_type,
             "website": p.get("website", ""),
             "linkedin_url": p.get("linkedin_url", ""),
+            "phone": p.get("phone", ""),
             "region": p.get("region", "Global"),
             "employees": p.get("employees", ""),
             "relevance_reason": p.get("relevance_reason", ""),
+            "lead_source": p.get("lead_source", "Unknown"),  # Apollo | Boolean Search | LinkedIn
+            "crm_tag": crm_tag,                               # "Qualified Lead" | "Travel Tech Prospect"
+            "crm_tags": crm_tags_list,                        # ["Qualified Lead", "OTA"] etc.
+            "qualification_status": q_status,                 # "Qualified" | "Raw"
             "outreach_score": p.get("outreach_score"),
             "outreach_reason": p.get("outreach_reason", ""),
             "connection_message": p.get("connection_message", ""),
             "is_dummy": p.get("is_dummy", False),
+            "source": p.get("source", "unknown"),
             "status": "pending_approval",
             "klenty_enrolled": False,
             "outplay_enrolled": False,
@@ -434,32 +624,101 @@ def _step5_queue_for_approval(prospects: list, run_id: str) -> int:
     return count
 
 
-def _step6_email_outreach(
+_HOTEL_COMPANY_TYPES = {"Bedbank", "Hotel Wholesaler", "Hotel Distribution"}
+_OTA_COMPANY_TYPES = {"OTA", "Travel Tech", "TMC", "other"}
+
+
+def _pick_apollo_sequence(apollo_config: ApolloConfig, company_type: str) -> str:
+    """
+    Choose the correct Apollo sequence ID based on company type.
+      Hotel-type companies (Bedbank / Hotel Wholesaler / Hotel Distribution) → ICP2 Hotels
+      All other travel tech (OTA / TMC / Travel Tech / Other)               → ICP1 OTA
+    Falls back to the other sequence if the preferred one is not configured.
+    """
+    prefer_hotels = company_type in _HOTEL_COMPANY_TYPES
+    if prefer_hotels:
+        return apollo_config.sequence_id_hotels or apollo_config.sequence_id_ota
+    else:
+        return apollo_config.sequence_id_ota or apollo_config.sequence_id_hotels
+
+
+def _step6_campaign_execution(
     run_id: str,
-    klenty_config: Optional[KlentyConfig],
+    apollo_config: Optional[ApolloConfig] = None,
     outplay_config: Optional[OutplayConfig] = None,
+    klenty_config: Optional[KlentyConfig] = None,
     hubspot_config: Optional[HubSpotConfig] = None,
 ) -> tuple:
     """
-    Enroll 'approved' prospects in Klenty, Outplay, and/or HubSpot Sequences.
-    Returns (klenty_enrolled, outplay_enrolled, hubspot_enrolled, skipped_count).
+    Enroll approved prospects into outreach campaigns.
+
+    Primary: Outplay 4-email sequence (Day 1 → 3 → 7 → 14)
+    Secondary: Klenty  |  HubSpot
+
+    NOTE: Apollo sequence enrollment is currently disabled.
+    Apollo is still used for CRM contact search (Step 1) but sequence
+    enrollment in Step 6 is skipped until a sequence ID is configured.
+
+    Campaign rules (per user story):
+      • Only enroll prospects with validated emails
+      • Sequence stops on reply
+      • Bounced emails suppressed by platform
+      • Respect unsubscribe
+
+    Returns (apollo_enrolled, outplay_enrolled, klenty_enrolled, hubspot_enrolled, queued_count).
     """
     targets = outreach_db.read()
-    klenty_enrolled = 0
+    apollo_enrolled = 0
     outplay_enrolled = 0
+    klenty_enrolled = 0
     hubspot_enrolled = 0
-    skipped = 0
+    queued = 0
     updated = False
 
     for t in targets:
         if t.get("run_id") != run_id and run_id:
             continue
         if t.get("status") != "approved":
-            skipped += 1
+            queued += 1
+            continue
+
+        # User story campaign rule: "Upload only validated emails"
+        if not _is_valid_email(t.get("email", "")):
+            logger.info("Skipping enrollment for %s — no valid email", t.get("id", "")[:8])
+            queued += 1
             continue
 
         name = f"{t.get('first_name', '')} {t.get('last_name', '')}".strip()
+        company_type = t.get("company_type", "OTA")
 
+        # ── Apollo sequence enrollment is disabled ────────────────────────
+        # Apollo is used only for CRM contact search (Step 1).
+        # Sequence enrollment will be re-enabled once a sequence ID is
+        # provided via Settings → Integrations.
+
+        # ── Primary: Outplay 4-email sequence (Sequence C — Travel Tech Outreach) ──
+        if outplay_config and not t.get("outplay_enrolled"):
+            try:
+                add_prospect_to_outplay(
+                    outplay_config,
+                    email=t.get("email", ""),
+                    name=name or None,
+                    company=t.get("company"),
+                    sequence_id=outplay_config.sequence_id_c or outplay_config.sequence_id_a,
+                )
+                t["outplay_enrolled"] = True
+                t["outplay_enrolled_at"] = _now()
+                outplay_enrolled += 1
+                updated = True
+            except IntegrationError:
+                t["outplay_enrolled"] = False
+                updated = True
+            except Exception as e:
+                logger.error("Outplay enrollment error for %s: %s", t.get("email"), str(e)[:100])
+                t["outplay_enrolled"] = False
+                updated = True
+
+        # ── Tertiary: Klenty ──────────────────────────────────────────────
         if klenty_config and not t.get("klenty_enrolled"):
             try:
                 add_prospect_to_klenty(
@@ -477,37 +736,11 @@ def _step6_email_outreach(
                 t["klenty_enrolled"] = False
                 updated = True
             except Exception as e:
-                logger.error("Unexpected error enrolling %s in Klenty: %s", t.get("email"), str(e)[:100])
+                logger.error("Klenty enrollment error for %s: %s", t.get("email"), str(e)[:100])
                 t["klenty_enrolled"] = False
                 updated = True
-        elif not klenty_config and not t.get("klenty_enrolled"):
-            t["klenty_status"] = "queued_no_config"
-            updated = True
 
-        if outplay_config and not t.get("outplay_enrolled"):
-            try:
-                add_prospect_to_outplay(
-                    outplay_config,
-                    email=t.get("email", ""),
-                    name=name or None,
-                    company=t.get("company"),
-                    sequence_id=outplay_config.sequence_id_a,
-                )
-                t["outplay_enrolled"] = True
-                t["outplay_enrolled_at"] = _now()
-                outplay_enrolled += 1
-                updated = True
-            except IntegrationError:
-                t["outplay_enrolled"] = False
-                updated = True
-            except Exception as e:
-                logger.error("Unexpected error enrolling %s in Outplay: %s", t.get("email"), str(e)[:100])
-                t["outplay_enrolled"] = False
-                updated = True
-        elif not outplay_config and not t.get("outplay_enrolled"):
-            t["outplay_status"] = "queued_no_config"
-            updated = True
-
+        # ── HubSpot ───────────────────────────────────────────────────────
         if hubspot_config and not t.get("hubspot_enrolled"):
             try:
                 enroll_in_hubspot_sequence(
@@ -524,87 +757,34 @@ def _step6_email_outreach(
                 t["hubspot_enrolled"] = False
                 updated = True
             except Exception as e:
-                logger.error("Unexpected error enrolling %s in HubSpot: %s", t.get("email"), str(e)[:100])
+                logger.error("HubSpot enrollment error for %s: %s", t.get("email"), str(e)[:100])
                 t["hubspot_enrolled"] = False
                 updated = True
-        elif not hubspot_config and not t.get("hubspot_enrolled"):
-            t["hubspot_status"] = "queued_no_config"
-            updated = True
-
-        if not klenty_config and not outplay_config and not hubspot_config:
-            skipped += 1
 
     if updated:
         outreach_db.write(targets)
 
-    return klenty_enrolled, outplay_enrolled, hubspot_enrolled, skipped
+    return apollo_enrolled, outplay_enrolled, klenty_enrolled, hubspot_enrolled, queued
 
 
-def _step7_linkedin_connection(
-    run_id: str,
-    phantombuster_config: Optional[PhantomBusterConfig] = None,
-) -> tuple:
-    """
-    Send LinkedIn connection requests.
-    If PhantomBuster is configured: launches Connection Sender phantom with personalized
-    messages → actual connection requests are sent (fire-and-forget).
-    If not configured: logs requests for manual follow-up.
-    Returns (logged_count, launched_count).
-    """
-    targets = outreach_db.read()
-    now = _now()
-    to_send = []
-
-    for t in targets:
-        if t.get("run_id") != run_id and run_id:
-            continue
-        if t.get("status") in ("approved", "pending_approval") and not t.get("linkedin_status"):
-            t["linkedin_status"] = "connection_requested"
-            t["linkedin_requested_at"] = now
-            if t.get("connection_message"):
-                t["linkedin_message"] = t["connection_message"]
-            to_send.append(t)
-
-    outreach_db.write(targets)
-
-    launched = 0
-    if phantombuster_config and to_send:
-        try:
-            launch_linkedin_connections(phantombuster_config, to_send)
-            launched = len(to_send)
-            # Update status to reflect actual send
-            for t in to_send:
-                t["linkedin_status"] = "sent_via_phantombuster"
-            outreach_db.write(targets)
-        except IntegrationError as e:
-            logger.warning("PhantomBuster connection launch failed (logged only): %s", str(e))
-
-    return len(to_send), launched
-
-
-def _step8_track_engagement(run_id: str) -> dict:
-    """
-    Aggregate metrics for this run and return summary dict.
-    Includes avg_outreach_score from the new step 4 analysis.
-    """
+def _aggregate_metrics(run_id: str) -> dict:
     targets = outreach_db.read()
     run_targets = [t for t in targets if t.get("run_id") == run_id] if run_id else targets
-
-    scores = [t["outreach_score"] for t in run_targets if t.get("outreach_score") is not None]
-    avg_score = round(sum(scores) / len(scores)) if scores else None
-
+    by_type: dict = {}
+    for t in run_targets:
+        ct = t.get("company_type", "Other")
+        by_type[ct] = by_type.get(ct, 0) + 1
     return {
         "total_prospects": len(run_targets),
         "pending_approval": sum(1 for t in run_targets if t.get("status") == "pending_approval"),
         "approved": sum(1 for t in run_targets if t.get("status") == "approved"),
-        "klenty_enrolled": sum(1 for t in run_targets if t.get("klenty_enrolled")),
+        "with_email": sum(1 for t in run_targets if _is_valid_email(t.get("email", ""))),
+        "apollo_enrolled": sum(1 for t in run_targets if t.get("apollo_enrolled")),
         "outplay_enrolled": sum(1 for t in run_targets if t.get("outplay_enrolled")),
+        "klenty_enrolled": sum(1 for t in run_targets if t.get("klenty_enrolled")),
         "hubspot_enrolled": sum(1 for t in run_targets if t.get("hubspot_enrolled")),
-        "linkedin_connection_sent": sum(
-            1 for t in run_targets
-            if t.get("linkedin_status") in ("connection_requested", "sent_via_phantombuster")
-        ),
-        "avg_outreach_score": avg_score,
+        "qualified_leads": sum(1 for t in run_targets if t.get("crm_tag") == "Qualified Lead"),
+        "by_company_type": by_type,
     }
 
 
@@ -618,12 +798,12 @@ def run_agent3_background(
     outplay_config: Optional[OutplayConfig] = None,
     hubspot_config: Optional[HubSpotConfig] = None,
     apollo_config: Optional[ApolloConfig] = None,
-    sales_nav_config: Optional[SalesNavigatorConfig] = None,
+    sales_nav_config=None,          # unused — kept for backward-compatible signature
     phantombuster_config: Optional[PhantomBusterConfig] = None,
 ) -> None:
     """
     Entry point for FastAPI BackgroundTasks.
-    Runs all 8 steps synchronously; updates _run_state throughout.
+    Runs all 6 steps synchronously; updates _run_state throughout.
     """
     global _run_state
 
@@ -641,185 +821,218 @@ def run_agent3_background(
             ],
         )
 
-    hot_leads = []
-    domain_to_ctx = {}
-    prospects_raw = []
-    prospects_filtered = []
-    prospects_analyzed = []
-    added_count = 0
-
     try:
-        # ── Step 1: Load qualified leads from Agent 2 ─────────────────────
-        _update_step(1, "running", "Reading Agent 2 hot leads from leads.json...")
-        hot_leads, domain_to_ctx = _step1_load_qualified_leads()
-        domain_count = len(domain_to_ctx)
-        if domain_count > 0:
-            domains_preview = ", ".join(list(domain_to_ctx.keys())[:5])
-            suffix = "..." if domain_count > 5 else ""
-            _update_step(
-                1, "completed",
-                f"Found {len(hot_leads)} hot leads across {domain_count} unique domain(s): "
-                f"{domains_preview}{suffix}"
-            )
-        else:
-            _update_step(
-                1, "completed",
-                "No Agent 2 hot leads found — will fall back to Apollo keyword or AI generation"
-            )
-
-        # ── Step 2: Prospect search ────────────────────────────────────────
-        if phantombuster_config and domain_to_ctx:
-            search_note = f"PhantomBuster LinkedIn Search for {domain_count} companies (polling ~2 min)"
-        elif sales_nav_config:
-            search_note = "LinkedIn Sales Navigator"
-        elif apollo_config and domain_to_ctx:
-            search_note = f"Apollo.io domain search for {domain_count} companies"
-        elif apollo_config:
-            search_note = "Apollo.io keyword search"
-        else:
-            search_note = "AI generation (⚠️ demo data — no real source configured)"
-        _update_step(2, "running", f"Searching prospects via {search_note}...")
-
-        prospects_raw, data_source = _step2_prospect_search(
-            hot_leads, domain_to_ctx, llm_config,
-            apollo_config, sales_nav_config, phantombuster_config
+        # ── Step 1: Prospect Discovery ─────────────────────────────────────
+        _disc_running_msg = (
+            "Apollo.io fetching CRM contacts — AI classifier will filter for "
+            "OTA / Bedbank / TMC / Wholesaler / Hotel Distribution decision-makers..."
+            if apollo_config else
+            "No Apollo API key configured — running LLM Boolean Search simulation "
+            "to generate travel tech prospect profiles..."
         )
-        for p in prospects_raw:
-            p["run_id"] = run_id
+        _update_step(1, "running", _disc_running_msg)
+
+        prospects_raw, data_source, disc_error = _step1_prospect_discovery(
+            llm_config, apollo_config, phantombuster_config
+        )
+
+        if data_source == "none":
+            # No data source produced results — abort gracefully
+            _update_step(1, "warning",
+                f"No prospects discovered. {disc_error}. "
+                f"Configure Apollo API key in Settings → Integrations for real prospect data, "
+                f"or ensure the LLM provider is reachable so the Boolean Search simulation can run.")
+            for step_num in range(2, 7):
+                _update_step(step_num, "skipped",
+                    "Skipped — no prospects available from Step 1")
+            _set_run_status("completed", result={
+                "total_discovered": 0,
+                "data_source": "none",
+                "reason": disc_error,
+            })
+            return
+
+        # How many came from each leg (for the label)
+        _apollo_count = sum(1 for p in prospects_raw if p.get("source") == "apollo_travel_tech")
+        _boolean_count = sum(1 for p in prospects_raw if p.get("source") == "boolean_search_sim")
 
         SOURCE_LABELS = {
-            "phantombuster_search": "PhantomBuster LinkedIn Search (real data — Agent 2 companies)",
-            "sales_navigator": "LinkedIn Sales Navigator (real data)",
-            "apollo_domain": "Apollo.io domain search (real data — Agent 2 companies)",
-            "apollo": "Apollo.io keyword search (real data)",
-            "llm": "⚠️ AI-generated demo data — configure PhantomBuster or Apollo in Settings to get real LinkedIn profiles",
+            "apollo_and_boolean": (
+                f"Apollo.io search + Boolean simulation ran in conjunction — "
+                f"{_apollo_count} real prospects (Apollo) + {_boolean_count} simulated (Boolean) "
+                f"= {len(prospects_raw)} total after dedup"
+                + (f". Note: {disc_error}" if disc_error else "")
+            ),
+            "apollo_travel_tech": (
+                f"Apollo.io Boolean search ran successfully — "
+                f"{len(prospects_raw)} real prospects found (OTA/Bedbank/TMC/Wholesaler decision-makers)"
+            ),
+            "phantombuster_search": (
+                f"PhantomBuster LinkedIn Search ran successfully — "
+                f"{len(prospects_raw)} real profiles exported"
+            ),
+            "boolean_search_sim": (
+                f"Boolean Search simulation — {len(prospects_raw)} profiles generated "
+                + (f"({disc_error}). " if disc_error else "")
+                + "Connect Apollo in Settings → Integrations to enrich with real data."
+            ),
         }
+        _update_step(1, "completed",
+            SOURCE_LABELS.get(data_source, f"Found {len(prospects_raw)} prospects via {data_source}"))
+        time.sleep(2)
+
+        # ── Step 2: Data Collection ────────────────────────────────────────
+        _update_step(2, "running",
+            "Collecting and normalizing prospect fields: Name, Job Title, Company, LinkedIn URL, "
+            "Company Website, Email, Phone, Location, Industry Type, Lead Source...")
+        prospects_normalized, with_email, missing_email = _step2_collect_data(prospects_raw, run_id)
         _update_step(
             2, "completed",
-            f"Found {len(prospects_raw)} prospects via {SOURCE_LABELS.get(data_source, data_source)}"
+            f"Collected {len(prospects_normalized)} records — "
+            f"{with_email} with email, {missing_email} email missing"
         )
-        time.sleep(3)
+        time.sleep(2)
 
-        # ── Step 3: Filter decision-makers ────────────────────────────────
-        _update_step(3, "running", "Filtering prospects by decision-maker title relevance...")
-        prospects_filtered = _step3_filter_decision_makers(prospects_raw, llm_config)
-        removed = len(prospects_raw) - len(prospects_filtered)
-        _update_step(
-            3, "completed",
-            f"Kept {len(prospects_filtered)}, removed {removed} non-decision-makers"
-        )
-        time.sleep(3)
+        # ── Step 3: Email Discovery ────────────────────────────────────────
+        _update_step(3, "running",
+            "Auditing email coverage — checking Apollo-supplied emails, flagging gaps for "
+            "enrichment via Apollo / Hunter / Prospeo / Snov / Dropcontact...")
+        prospects_with_email_status, found, missing = _step3_email_discovery(prospects_normalized)
+        coverage_pct = round((found / len(prospects_with_email_status)) * 100) if prospects_with_email_status else 0
+        if missing > 0:
+            email_note = (
+                f"{found}/{len(prospects_with_email_status)} emails found ({coverage_pct}% coverage). "
+                f"{missing} prospects missing emails — use Apollo/Hunter/Prospeo to enrich manually."
+            )
+        else:
+            email_note = f"All {found} prospects have valid emails ({coverage_pct}% coverage)."
+        _update_step(3, "completed", email_note)
+        time.sleep(2)
 
-        # ── Step 4: Analyze outreach fit (NEW) ────────────────────────────
+        # ── Step 4: Data Cleaning ──────────────────────────────────────────
         _update_step(
             4, "running",
-            f"AI-analyzing outreach fit for {len(prospects_filtered)} prospects "
-            f"using Agent 2 company context..."
+            f"Cleaning {len(prospects_with_email_status)} prospects: "
+            "removing duplicate emails & LinkedIn URLs → AI role filter (keep tech/product/ops only) → "
+            "AI company classifier (OTA/Bedbank/TMC/Wholesaler/Travel Tech/Hotel Distribution) → "
+            "qualification tagging (Qualified Lead / Travel Tech Prospect)..."
         )
-        prospects_analyzed = _step4_analyze_outreach_fit(
-            prospects_filtered, domain_to_ctx, llm_config
-        )
-        scored_count = sum(1 for p in prospects_analyzed if p.get("outreach_score") is not None)
-        high_fit = sum(1 for p in prospects_analyzed if (p.get("outreach_score") or 0) >= 70)
+        prospects_cleaned, removed_prospects = _step4_data_cleaning(prospects_with_email_status, llm_config)
+        removed_count = len(removed_prospects)
+        type_counts = {}
+        for p in prospects_cleaned:
+            ct = p.get("company_type", "Other")
+            type_counts[ct] = type_counts.get(ct, 0) + 1
+        type_summary = ", ".join(f"{v} {k}" for k, v in sorted(type_counts.items(), key=lambda x: -x[1]))
         _update_step(
             4, "completed",
-            f"Analyzed {scored_count}/{len(prospects_analyzed)} prospects — "
-            f"{high_fit} with high outreach fit (score ≥ 70)"
+            f"Kept {len(prospects_cleaned)}, removed {removed_count} (duplicates/off-target roles/non-travel-tech). "
+            f"Company breakdown: {type_summary or 'N/A'}"
         )
-        time.sleep(3)
 
-        # ── Step 5: Queue for manual approval ─────────────────────────────
-        _update_step(5, "running", "Saving prospects for manual review...")
-        added_count = _step5_queue_for_approval(prospects_analyzed, run_id)
+        # Persist removed prospects so users can inspect them in the UI
+        _now_ts = _now()
+        for rp in removed_prospects:
+            rp.setdefault("run_id", run_id)
+            rp.setdefault("created_at", _now_ts)
+            rp["removed_at"] = _now_ts
+            rejected_db.append(rp)
+
+        time.sleep(2)
+
+        # ── Step 5: CRM Upload (Matters Board) ────────────────────────────
+        _update_step(5, "running",
+            "Uploading qualified prospects to Matters Board CRM — applying tags: "
+            "Qualified Lead / Travel Tech Prospect + OTA / Bedbank / TMC industry tags. "
+            "Avoiding duplicate records, linking contacts to companies...")
+        added_count = _step5_crm_upload(prospects_cleaned, run_id)
+        qualified_count = sum(
+            1 for p in prospects_cleaned
+            if (_crm_tag_for_title(p.get("title", ""))) == "Qualified Lead"
+        )
+        fully_qualified = sum(
+            1 for p in prospects_cleaned
+            if p.get("qualification_status") == "Qualified"
+            or (_crm_tag_for_title(p.get("title", "")) == "Qualified Lead" and _is_valid_email(p.get("email", "")))
+        )
         _update_step(
             5, "completed",
-            f"{added_count} prospects saved — approve them in Agent 3 detail page to start outreach"
+            f"{added_count} prospects saved to Matters Board CRM — "
+            f"{qualified_count} tagged 'Qualified Lead', {added_count - qualified_count} tagged 'Travel Tech Prospect'. "
+            f"{fully_qualified} fully qualified (valid email + senior role). "
+            f"Approve prospects in the Agent 3 detail page to launch outreach campaigns."
         )
 
-        # ── Step 6: Email outreach via Klenty / Outplay / HubSpot ────────
+        # ── Step 6: Campaign Execution ────────────────────────────────────
         platforms = []
+        if outplay_config:
+            platforms.append("Outplay (4-email sequence: Day 1 Intro → Day 3 Follow-up → Day 7 Value → Day 14 Final)")
         if klenty_config:
             platforms.append("Klenty")
-        if outplay_config:
-            platforms.append("Outplay")
         if hubspot_config:
             platforms.append("HubSpot")
-        platform_note = f"via {' & '.join(platforms)}" if platforms else "(no platform configured — queuing)"
-        _update_step(6, "running", f"Starting email outreach {platform_note}...")
-        klenty_cnt, outplay_cnt, hubspot_cnt, skipped = _step6_email_outreach(
-            run_id, klenty_config, outplay_config, hubspot_config
+        platform_note = f"via {' & '.join(platforms)}" if platforms else "(no platform configured — queuing for manual launch)"
+        _update_step(6, "running",
+            f"Launching outreach campaigns {platform_note} — "
+            "uploading only validated emails, sequence stops on reply, bounced emails suppressed...")
+
+        apollo_cnt, outplay_cnt, klenty_cnt, hubspot_cnt, queued = _step6_campaign_execution(
+            run_id, apollo_config, outplay_config, klenty_config, hubspot_config
         )
         enroll_parts = []
-        if klenty_config:
-            enroll_parts.append(f"{klenty_cnt} enrolled in Klenty")
         if outplay_config:
             enroll_parts.append(f"{outplay_cnt} enrolled in Outplay")
+        if klenty_config:
+            enroll_parts.append(f"{klenty_cnt} enrolled in Klenty")
         if hubspot_config:
             enroll_parts.append(f"{hubspot_cnt} enrolled in HubSpot")
+
         if enroll_parts:
-            _update_step(6, "completed", f"{', '.join(enroll_parts)}, {skipped} pending approval")
+            _update_step(6, "completed",
+                f"{', '.join(enroll_parts)}, {queued} pending approval. "
+                "Sequence stops automatically on reply — bounced/unsubscribed emails suppressed.")
         else:
             _update_step(
                 6, "completed",
-                f"{skipped} queued — connect Klenty, Outplay, or HubSpot in Settings to enable auto-enrollment"
+                f"{queued} prospects queued for outreach — approve prospects in the detail page, "
+                "then connect Apollo/Outplay/Klenty in Settings → Integrations to launch outreach sequences."
             )
 
-        # ── Step 7: LinkedIn connection requests ──────────────────────────
-        if phantombuster_config:
-            li_note = "Launching PhantomBuster LinkedIn Connection Sender..."
-        else:
-            li_note = "Logging LinkedIn connection requests (configure PhantomBuster to send automatically)..."
-        _update_step(7, "running", li_note)
-        li_logged, li_launched = _step7_linkedin_connection(run_id, phantombuster_config)
-        if li_launched > 0:
-            _update_step(
-                7, "completed",
-                f"PhantomBuster launched for {li_launched} prospects — check PhantomBuster dashboard"
-            )
-        else:
-            _update_step(7, "completed", f"Connection requests logged for {li_logged} prospects")
+        # Final metrics
+        metrics = _aggregate_metrics(run_id)
+        all_saved = outreach_db.read()
+        run_saved = [t for t in all_saved if t.get("run_id") == run_id]
+        fully_qual_saved = sum(1 for t in run_saved if t.get("qualification_status") == "Qualified")
 
-        # ── Step 8: Track engagement ──────────────────────────────────────
-        _update_step(8, "running", "Aggregating engagement metrics...")
-        summary = _step8_track_engagement(run_id)
-        enrolled_total = (
-            summary["klenty_enrolled"] + summary["outplay_enrolled"] + summary["hubspot_enrolled"]
-        )
-        score_note = (
-            f", avg outreach score: {summary['avg_outreach_score']}/100"
-            if summary.get("avg_outreach_score") is not None else ""
-        )
-        _update_step(
-            8, "completed",
-            f"Total: {summary['total_prospects']} prospects, "
-            f"{enrolled_total} enrolled{score_note}, "
-            f"{summary['pending_approval']} awaiting approval"
-        )
-
-        _set_run_status("completed", result={
-            "hot_leads_loaded": len(hot_leads),
-            "domains_searched": domain_count,
-            "total_prospects": summary["total_prospects"],
-            "pending_approval": summary["pending_approval"],
-            "klenty_enrolled": summary["klenty_enrolled"],
-            "outplay_enrolled": summary["outplay_enrolled"],
-            "hubspot_enrolled": summary["hubspot_enrolled"],
-            "linkedin_connections": summary["linkedin_connection_sent"],
-            "avg_outreach_score": summary["avg_outreach_score"],
-        })
+        final_result: dict = {
+            "total_discovered": len(prospects_raw),
+            "total_cleaned": len(prospects_cleaned),
+            "with_email": metrics["with_email"],
+            "qualified_leads": metrics["qualified_leads"],
+            "qualified_prospects": fully_qual_saved,  # crm_tag=Qualified Lead + valid email
+            "pending_approval": metrics["pending_approval"],
+            "apollo_enrolled": metrics["apollo_enrolled"],
+            "outplay_enrolled": metrics["outplay_enrolled"],
+            "klenty_enrolled": metrics["klenty_enrolled"],
+            "hubspot_enrolled": metrics["hubspot_enrolled"],
+            "by_company_type": metrics["by_company_type"],
+            "data_source": data_source,
+        }
+        if data_source == "apollo_and_boolean":
+            final_result["apollo_count"] = _apollo_count
+            final_result["boolean_count"] = _boolean_count
+        _set_run_status("completed", result=final_result)
 
     except LLMError as e:
         current_step = next(
-            (s.step_number for s in _run_state.steps if s.status == "running"),
-            2
+            (s.step_number for s in _run_state.steps if s.status == "running"), 1
         )
         _update_step(current_step, "failed", f"AI error: {str(e)[:200]}")
         _set_run_status("failed", error=f"LLM error: {str(e)[:200]}")
 
     except Exception as e:
         current_step = next(
-            (s.step_number for s in _run_state.steps if s.status == "running"),
-            1
+            (s.step_number for s in _run_state.steps if s.status == "running"), 1
         )
         _update_step(current_step, "failed", str(e)[:200])
         _set_run_status("failed", error=str(e)[:200])

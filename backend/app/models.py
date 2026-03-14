@@ -51,13 +51,17 @@ class OutplayConfigModel(BaseModel):
     client_id: str = ""                             # ?client_id= query param
     user_id: str = ""                               # Outplay user ID (required for sequence enrollment)
     location: str = "us4"                           # Regional server, e.g. "us4"
-    sequence_id_a: str = ""                         # Qualified Lead Marktech (score > 70)
-    sequence_id_b: str = ""                         # Personal Lead Marktech (Gmail/Yahoo/etc.)
+    sequence_id_a: str = ""                         # Qualified Lead Marktech — Agent 2 (score > 70)
+    sequence_id_b: str = ""                         # Personal Lead Marktech  — Agent 2 (Gmail/Yahoo/etc.)
+    sequence_id_c: str = ""                         # Travel Tech Outreach    — Agent 3 (Matters broad)
 
 
 class ApolloConfigModel(BaseModel):
     api_key: str
     per_page: int = 10
+    sequence_id_ota: str = ""      # Apollo ICP1 sequence — OTA / Travel Tech / TMC companies
+    sequence_id_hotels: str = ""   # Apollo ICP2 sequence — Bedbank / Hotel Wholesaler / Hotel Distribution
+    email_account_id: str = ""     # Apollo mailbox ID used to send sequence emails
 
 
 class SalesNavigatorConfigModel(BaseModel):
@@ -79,8 +83,16 @@ class PhantomBusterConfigModel(BaseModel):
     connections_per_launch: int = 10    # Cap per run to stay within LinkedIn daily limits
 
 
+class ImageGenConfigModel(BaseModel):
+    provider: str       # "openai" | "gemini"
+    api_key: str
+    model: str          # "dall-e-3" | "gemini-2.0-flash-exp-image-generation" | "imagen-3.0-generate-002"
+    enabled: bool = True
+
+
 class RunAgentRequest(BaseModel):
     llm_config: LLMConfigModel
+    image_gen_config: Optional[ImageGenConfigModel] = None
     wordpress: Optional[WordPressConfigModel] = None
     linkedin: Optional[LinkedInConfigModel] = None
     klenty: Optional[KlentyConfigModel] = None
@@ -89,6 +101,14 @@ class RunAgentRequest(BaseModel):
     sales_navigator: Optional[SalesNavigatorConfigModel] = None
     hubspot: Optional[HubSpotConfigModel] = None
     phantombuster: Optional[PhantomBusterConfigModel] = None
+
+
+class ApproveTargetRequest(BaseModel):
+    """Request body for the approve-prospect endpoint.
+    Includes optional Outplay config so the prospect can be enrolled immediately
+    on approval rather than waiting for the next full agent run.
+    """
+    outplay: Optional[OutplayConfigModel] = None
 
 
 # ─────────────────────────────────────────────────────────────

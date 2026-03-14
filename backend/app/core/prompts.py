@@ -161,11 +161,21 @@ Return JSON exactly like this example structure:
 }}"""
 
 
-def linkedin_image_prompt(topic: str) -> str:
-    """Returns the DALL-E prompt for a LinkedIn post illustration."""
+def linkedin_image_prompt(topic: str, post_text: str = "") -> str:
+    """Returns a prompt for a simple, minimal infographic related to the topic."""
+    core_concept = topic
+    if post_text:
+        lines = [l.strip() for l in post_text.split("\n") if l.strip()]
+        if lines:
+            core_concept = lines[0][:150]
+
     return (
-        f"high quality illustration for LinkedIn about {topic} in B2B travel technology, "
-        "clean, editorial style, no text, no words, professional"
+        f"Simple minimal infographic about: {core_concept}. "
+        "Clean white background, flat design, 2-3 key visual elements only. "
+        "Use icons or simple shapes to represent the concept. "
+        "Dark navy accents. No text, no labels, no words, no numbers. "
+        "No people, no photos, no decorative clutter. "
+        "Professional B2B style. Square format."
     )
 
 
@@ -260,106 +270,210 @@ Score > 70 = Qualified (strong ICP fit, enroll in Marktech Sequence A). Score �
 
 
 # ─────────────────────────────────────────────────────────────
-# AGENT 3: LINKEDIN OUTBOUND AUTOMATION
+# AGENT 3: TRAVEL TECH LEAD GENERATION & OUTREACH
 # ─────────────────────────────────────────────────────────────
 
-PROSPECT_GENERATION_SYSTEM = """You are a B2B sales intelligence specialist for Vervotech, a hotel content API and mapping solution provider targeting travel industry companies. Generate realistic prospect profiles for outbound sales outreach.
+# Target roles per user story
+TRAVEL_TECH_TARGET_ROLES = [
+    "CTO", "VP Engineering", "VP of Engineering", "Head of Engineering",
+    "Director of Technology", "Director of Engineering",
+    "VP Product", "VP of Product", "Head of Product",
+    "Product Manager", "Senior Product Manager",
+    "Operations Manager", "Supply Manager",
+    "Content Manager", "Connectivity Manager",
+    "Director of Product", "Chief Technology Officer",
+    "Chief Product Officer", "Head of Technology",
+]
 
-Vervotech targets: OTAs, travel agencies, hotel chains, booking platforms, TMCs, tour operators.
-Decision-maker personas: CTO, VP Technology, Product Head, Founder/CEO, Head of Supply, Head of Partnerships.
+# Target industries per user story
+TRAVEL_TECH_INDUSTRIES = [
+    "Online Travel Agency", "OTA",
+    "Bed Bank", "Bedbank",
+    "Hotel Wholesaler", "Wholesaler",
+    "Travel Management Company", "TMC",
+    "Travel Technology",
+    "Hotel Distribution Platform",
+    "Travel Platform",
+]
+
+TRAVEL_TECH_LEAD_GENERATION_SYSTEM = """You are a B2B lead generation expert simulating the results of Google and LinkedIn Boolean search queries for Vervotech, a hotel content API and hotel mapping solution provider.
+
+Your task: generate realistic LinkedIn decision-maker profiles that would surface from these Boolean search queries:
+
+  site:linkedin.com/in ("travel tech" OR OTA OR "online travel agency" OR "bed bank")
+    (CTO OR "VP Engineering" OR "head of engineering" OR "product manager")
+    ("hotel mapping" OR "hotel content" OR "hotel inventory")
+
+  site:linkedin.com/in ("travel technology" OR "bedbank" OR "hotel distribution")
+    ("VP Product" OR "Head of Product") ("hotel mapping" OR "room mapping")
+
+  site:linkedin.com/in ("bed bank" OR wholesaler OR OTA)
+    ("Supply Manager" OR "Connectivity Manager")
+    ("supplier normalization" OR "hotel mapping")
+
+Target companies:
+• Online Travel Agencies (OTAs) — book hotels/flights for consumers
+• Bedbanks — supply hotel rooms B2B (e.g. Hotelbeds, WebBeds)
+• Hotel Wholesalers — aggregate hotel inventory
+• Travel Management Companies (TMCs) — manage corporate travel (e.g. Amex GBT, CWT)
+• Travel Technology Companies — booking engines, distribution platforms
+• Hotel Distribution Platforms — channel managers, connectivity hubs
+
+These companies deal with: hotel inventory aggregation, supplier integrations, hotel content management, travel distribution platforms, booking engines, travel marketplaces.
+
+Pain points these prospects face daily:
+• Duplicate hotel listings across suppliers
+• Inconsistent hotel content (names, descriptions, amenities)
+• Mismatched room types between suppliers
+• Poor inventory normalization
+• Supplier data inconsistencies
+
+Vervotech's value proposition: hotel mapping API + content normalization — unifies hotel records across suppliers, normalizes content, removes duplicates, standardizes inventory.
 
 IMPORTANT: Respond with valid JSON only — no markdown fences."""
 
 
-def prospect_generation_user(persona: str, industry: str = "travel technology", region: str = "Global") -> str:
-    return f"""Generate 8 realistic B2B prospect profiles for Vervotech outreach.
+def travel_tech_lead_generation_user(industry: str = "travel technology", region: str = "Global", count: int = 10) -> str:
+    return f"""Simulate LinkedIn Boolean search results for Vervotech outreach. Generate {count} realistic B2B prospect profiles.
 
-Target persona: {persona}
 Industry focus: {industry}
 Region: {region}
 
-Each prospect should work at a travel/hospitality company that would benefit from hotel content APIs or hotel mapping solutions.
+Each prospect works at a travel tech company that aggregates hotel inventory from multiple suppliers — the exact audience facing hotel data normalization challenges that Vervotech solves.
 
-Return a JSON array of 8 prospect objects:
+Return a JSON array of {count} prospect objects:
 [
   {{
     "id": "unique-id-string",
     "first_name": "realistic first name",
     "last_name": "realistic last name",
     "email": "firstname.lastname@companyname.com",
-    "title": "{persona}",
-    "company": "realistic travel company name",
-    "company_type": "ota | hotel_chain | travel_agency | tmc | booking_platform | tour_operator",
+    "title": "one of: CTO | VP Engineering | Head of Engineering | Director of Technology | VP Product | Head of Product | Product Manager | Operations Manager | Supply Manager | Content Manager | Connectivity Manager",
+    "company": "realistic travel tech company name (e.g. Hotelbeds, WebBeds, Booking.com, Expedia, CWT, Travelport, MakeMyTrip, OYO, Despegar, HotelBeds, RateGain, SiteMinder, etc.)",
+    "company_type": "OTA | Bedbank | Hotel Wholesaler | TMC | Travel Tech | Hotel Distribution",
     "website": "https://www.companyname.com",
     "linkedin_url": "https://www.linkedin.com/in/firstname-lastname",
-    "region": "{region}",
+    "phone": "+1-555-000-0000 or empty string",
+    "region": "country or region",
     "employees": "50-500 | 500-2000 | 2000+",
+    "lead_source": "Boolean Search",
+    "qualification_status": "Raw",
+    "relevance_reason": "1 sentence: specific hotel data problem this person faces — e.g. duplicate listings across suppliers, inconsistent room type mapping, poor content normalization — that Vervotech directly solves",
     "status": "raw"
   }}
 ]
 
-Make the companies and people realistic and diverse. Use varied company sizes and regions within {region}."""
+Vary company types — include OTAs, bedbanks, TMCs, wholesalers, and travel platforms. Use diverse regions: US, UK, Europe, Middle East, APAC.
+Focus on companies that aggregate hotel inventory from multiple suppliers — they face the data normalization problems Vervotech solves."""
 
 
-PROSPECT_FILTER_SYSTEM = """You are a B2B sales SDR at Vervotech. Your job is to filter a list of prospects and remove anyone who is clearly not a decision-maker relevant to purchasing hotel content APIs or technology solutions.
+TRAVEL_TECH_ROLE_FILTER_SYSTEM = """You are a B2B sales SDR at Vervotech qualifying inbound prospects from Boolean search results.
 
-Remove prospects with these titles (they cannot authorize technology purchases): Marketing, HR, Finance, Legal, Customer Support, Sales Rep, Account Executive.
-Keep: CTO, VP Technology, Product Head, Founder, CEO, Head of Supply, Head of Partnerships, Technical Lead, Engineering Manager.
+QUALIFICATION CRITERIA — a prospect is qualified when ALL THREE apply:
+  1. Company distributes hotel inventory (OTA, Bedbank, Wholesaler, TMC, Travel Tech, Hotel Distribution)
+  2. Role can influence technology, product, or operations decisions
+  3. (Email evaluated separately — keep prospects even if email is missing, but flag quality)
+
+KEEP these roles:
+• Technology: CTO, Chief Technology Officer, Head of Technology, Director of Technology, VP Engineering, Head of Engineering, Director of Engineering
+• Product: VP Product, Head of Product, Director of Product, Product Manager, Senior Product Manager, Chief Product Officer
+• Operations: Operations Manager, Supply Manager, Content Manager, Connectivity Manager
+• Any role containing: Supply, Content, Connectivity, Mapping, Distribution, Integration
+
+REMOVE these roles (cannot authorize technology purchases):
+• Marketing Manager, HR Manager, Finance, Legal, Customer Support, Sales Rep, Account Executive, Recruiter, Office Manager, Executive Assistant
 
 IMPORTANT: Respond with valid JSON only — no markdown fences."""
 
 
-def prospect_filter_user(prospects_json: str) -> str:
-    return f"""Filter this list of prospects. Remove any with titles that are not decision-makers for technology purchases (marketing, HR, finance, legal, support, sales reps).
+def travel_tech_role_filter_user(prospects_json: str) -> str:
+    return f"""Filter this prospect list. Keep only decision-makers who can evaluate hotel content APIs and mapping solutions.
 
-For each prospect you KEEP, add a "relevance_reason" field explaining why they are a good fit.
-Update the "status" field to "filtered" for all kept prospects.
+For each prospect you KEEP, add or update these fields:
+- "relevance_reason": 1 sentence — the specific hotel data problem this person faces (duplicate listings, inconsistent room type mapping, supplier content inconsistencies, normalization gaps) that Vervotech solves
+- "status": "filtered"
+- "crm_tag": "Qualified Lead" if title is CTO / VP / Director / Head, else "Travel Tech Prospect"
+- "qualification_status": "Qualified" if company clearly distributes hotel inventory AND role is tech/product/ops, else "Raw"
 
-Return a JSON array of only the kept prospects (same structure as input, with added relevance_reason and updated status):
+Return a JSON array of kept prospects only (same structure plus updated fields):
 
-Prospects to filter:
+Prospects:
+{prospects_json[:4000]}"""
+
+
+TRAVEL_TECH_COMPANY_CLASSIFIER_SYSTEM = """You are a B2B data analyst classifying travel companies for Vervotech's ICP (Ideal Customer Profile) targeting.
+
+Classify each company into the correct travel tech category. Companies that deal with hotel inventory, content, bookings, or distribution are ideal Vervotech customers.
+
+IMPORTANT: Respond with valid JSON only — no markdown fences."""
+
+
+def travel_tech_company_classifier_user(prospects_json: str) -> str:
+    return f"""Classify each prospect's company_type field based on their company name, website, and title context.
+
+Use these exact company_type values:
+- "OTA" — Online Travel Agency (books hotels/flights for end consumers: Booking.com, Expedia, MakeMyTrip)
+- "Bedbank" — B2B hotel bed bank/wholesaler (supplies hotel rooms to OTAs: Hotelbeds, WebBeds)
+- "Hotel Wholesaler" — Hotel inventory wholesaler/aggregator
+- "TMC" — Travel Management Company (manages corporate travel: Amex GBT, CWT)
+- "Travel Tech" — Travel technology software/platform company
+- "Hotel Distribution" — Hotel distribution or channel management platform
+- "Other" — Does not clearly fit travel tech ecosystem (flag for review)
+
+For each prospect, update the "company_type" field with the correct value.
+Also add "is_travel_tech": true if the company clearly belongs to the travel tech ecosystem, false if uncertain.
+
+Return the full JSON array with updated company_type and is_travel_tech fields:
+
+Prospects:
 {prospects_json[:4000]}"""
 
 
 # ─────────────────────────────────────────────────────────────
-# AGENT 3: OUTREACH FIT ANALYSIS  (uses Agent 2 company context)
+# AGENT 3: OUTREACH FIT ANALYSIS  (kept for backward compatibility)
 # ─────────────────────────────────────────────────────────────
+
+PROSPECT_GENERATION_SYSTEM = TRAVEL_TECH_LEAD_GENERATION_SYSTEM
+
+
+def prospect_generation_user(persona: str, industry: str = "travel technology", region: str = "Global") -> str:
+    return travel_tech_lead_generation_user(industry, region, count=8)
+
+
+PROSPECT_FILTER_SYSTEM = TRAVEL_TECH_ROLE_FILTER_SYSTEM
+
+
+def prospect_filter_user(prospects_json: str) -> str:
+    return travel_tech_role_filter_user(prospects_json)
+
 
 PROSPECT_ANALYSIS_SYSTEM = """You are a B2B sales intelligence analyst for Vervotech, a hotel content API and property mapping solution for OTAs, hotel chains, booking platforms, and TMCs.
 
-Your task: analyze a LinkedIn prospect and score their suitability for personalized outreach, using real signals about their company from a prior AI-driven website analysis.
+Your task: analyze a travel tech prospect and score their suitability for personalized outreach.
 
 Rules:
-- outreach_score 0-100: combines company fit (from Agent 2 score) + title seniority.
+- outreach_score 0-100: based on company type fit + title seniority.
   90-100 = perfect fit senior decision-maker; 70-89 = good; 50-69 = moderate; 0-49 = low.
 - outreach_reason: exactly 2 sentences. Sentence 1 = company fit. Sentence 2 = why this title is the right contact.
-- connection_message: genuine personalized LinkedIn note 200 characters max. Reference a specific signal. Do NOT start with "Hi" or "Hello". Do NOT use "I saw your profile" or "I noticed you work at".
+- connection_message: genuine personalized LinkedIn note 200 characters max. Reference hotel mapping/content challenges. Do NOT start with "Hi" or "Hello".
 - Respond with valid JSON only — no markdown fences."""
 
 
 def prospect_analysis_user(prospect: dict, company_ctx: dict) -> str:
-    signals_str = "; ".join(company_ctx.get("signals") or []) or "None identified"
-    concerns_str = "; ".join(company_ctx.get("concerns") or []) or "None"
-    return f"""Analyze this prospect for Vervotech LinkedIn outreach.
+    return f"""Analyze this travel tech prospect for Vervotech outreach.
 
 Prospect:
   Name: {prospect.get('first_name', '')} {prospect.get('last_name', '')}
   Title: {prospect.get('title', '')}
   Company: {prospect.get('company', '')} ({prospect.get('company_type', 'unknown')})
   Website: {prospect.get('website', '')}
-
-Company context (from Agent 2 web analysis):
-  Company Type: {company_ctx.get('company_type', 'unknown')}
-  Agent 2 Fit Score: {company_ctx.get('score', 'N/A')}/100
-  Reasoning: {company_ctx.get('reasoning', 'Not available')}
-  Positive Signals: {signals_str}
-  Concerns: {concerns_str}
+  Relevance: {prospect.get('relevance_reason', 'Not available')}
 
 Return JSON:
 {{
   "outreach_score": 85,
   "outreach_reason": "Sentence 1 company fit. Sentence 2 why this title.",
-  "connection_message": "Personalized LinkedIn note max 200 chars referencing a specific signal."
+  "connection_message": "Personalized LinkedIn note max 200 chars about hotel mapping/content."
 }}"""
 
 

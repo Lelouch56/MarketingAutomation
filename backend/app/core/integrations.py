@@ -178,12 +178,19 @@ def _linkedin_upload_image_binary(upload_url: str, access_token: str, image_sour
         except Exception as e:
             raise IntegrationError(f"Failed to decode image data URI: {str(e)[:200]}")
     else:
-        # Public URL (DALL-E etc.) — download via HTTP
+        # Public URL (DALL-E, Ideogram, etc.) — download via HTTP
         try:
-            img_resp = requests.get(image_source, timeout=30)
+            img_resp = requests.get(
+                image_source,
+                timeout=30,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; MarketingAutomation/1.0)"},
+                allow_redirects=True,
+            )
             img_resp.raise_for_status()
             image_bytes = img_resp.content
-            content_type = img_resp.headers.get("Content-Type", "image/jpeg")
+            # Normalize content-type: LinkedIn accepts jpeg/png; default to jpeg
+            raw_ct = img_resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+            content_type = raw_ct if raw_ct in ("image/jpeg", "image/png", "image/gif") else "image/jpeg"
         except Exception as e:
             raise IntegrationError(f"Failed to download image from URL: {str(e)[:200]}")
 
@@ -418,8 +425,9 @@ class OutplayConfig:
     client_id: str = ""                         # ?client_id= query param
     user_id: str = ""                           # Outplay user ID (required for sequence enrollment)
     location: str = "us4"                       # Regional server, e.g. "us4" → us4-api.outplayhq.com
-    sequence_id_a: str = ""                     # Qualified Lead Marktech sequence (ICP score > 70)
-    sequence_id_b: str = ""                     # Personal Lead Marktech sequence (Gmail/Yahoo/etc.)
+    sequence_id_a: str = ""                     # Qualified Lead Marktech — Agent 2 (ICP score > 70)
+    sequence_id_b: str = ""                     # Personal Lead Marktech  — Agent 2 (Gmail/Yahoo/etc.)
+    sequence_id_c: str = ""                     # Travel Tech Outreach    — Agent 3 (Matters broad)
 
 
 def add_prospect_to_outplay(
@@ -816,6 +824,9 @@ import uuid as _uuid
 class ApolloConfig:
     api_key: str
     per_page: int = 10
+    sequence_id_ota: str = ""      # Apollo ICP1 — OTA / Travel Tech companies
+    sequence_id_hotels: str = ""   # Apollo ICP2 — Bedbank / Hotel Wholesaler / Hotel Distribution
+    email_account_id: str = ""     # Apollo mailbox ID (from emailer_accounts endpoint)
 
 
 def _apollo_employees_range(num) -> str:
@@ -846,6 +857,7 @@ def search_apollo_prospects(config: ApolloConfig, persona: str, industry: str = 
         "X-Api-Key": config.api_key,
     }
     payload = {
+        "api_key": config.api_key,   # Apollo V1 requires key in body, not just header
         "person_titles": [persona],
         "q_keywords": f"{industry} technology hotel",
         "per_page": config.per_page,
@@ -929,6 +941,7 @@ def search_apollo_by_domains(
         "X-Api-Key": config.api_key,
     }
     payload = {
+        "api_key": config.api_key,   # Apollo V1 requires key in body, not just header
         "q_organization_domains_list": domains,
         "person_titles": person_titles,
         "per_page": config.per_page,
@@ -973,29 +986,256 @@ def search_apollo_by_domains(
         raise IntegrationError(f"Apollo domain search failed: {str(e)[:200]}")
 
 
+def search_apollo_travel_tech(config: ApolloConfig) -> list:
+    """
+    Apollo CRM contacts search — free-plan compatible.
+    Uses /v1/contacts/search which is available on all Apollo plans including free.
+    Fetches contacts already saved in the user's Apollo CRM (imported via CSV,
+    LinkedIn export, manual add, etc.).
+    Step 4 AI classifier then filters for travel-tech relevant contacts.
+    Returns prospect dicts compatible with Agent 3's schema.
+    Raises IntegrationError on failure.
+    """
+    url = "https://api.apollo.io/v1/contacts/search"
+    headers = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": config.api_key,
+    }
+
+    payload = {
+        "api_key": config.api_key,   # Apollo V1 requires key in body
+        "per_page": config.per_page,
+        "page": 1,
+    }
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        contacts = data.get("contacts", [])
+        prospects = []
+        for p in contacts:
+            org = p.get("organization") or p.get("account") or {}
+            domain = org.get("primary_domain", "")
+            fn = (p.get("first_name") or "").lower().strip()
+            ln = (p.get("last_name") or "").lower().strip()
+
+            # Prefer verified business email; fall back to top-level email or constructed
+            email = p.get("email", "")
+            for ce in (p.get("contact_emails") or []):
+                if isinstance(ce, dict) and not ce.get("free_domain") and ce.get("email_true_status") == "Verified":
+                    email = ce.get("email", email)
+                    break
+            if not email and domain and fn:
+                email = f"{fn}.{ln}@{domain}"
+
+            # Phone
+            phone = ""
+            phone_numbers = p.get("phone_numbers") or []
+            if phone_numbers and isinstance(phone_numbers, list):
+                phone = phone_numbers[0].get("sanitized_number", "") if isinstance(phone_numbers[0], dict) else ""
+            elif p.get("sanitized_phone"):
+                phone = p.get("sanitized_phone", "")
+
+            prospects.append({
+                "id": str(_uuid.uuid4()),
+                "first_name": p.get("first_name", ""),
+                "last_name": p.get("last_name", ""),
+                "email": email,
+                "title": p.get("title", ""),
+                "company": org.get("name", "") or p.get("organization_name", ""),
+                "company_type": "other",   # classified in step 4
+                "website": org.get("website_url", ""),
+                "linkedin_url": p.get("linkedin_url") or "",
+                "phone": phone,
+                "region": p.get("city") or p.get("country") or "Global",
+                "employees": _apollo_employees_range(org.get("num_employees")),
+                "status": "raw",
+                "source": "apollo_travel_tech",
+                "is_dummy": False,
+            })
+        return prospects
+    except requests.exceptions.ConnectionError:
+        raise IntegrationError("Cannot connect to Apollo.io. Check your network.")
+    except requests.exceptions.HTTPError as e:
+        sc = e.response.status_code if e.response is not None else "?"
+        if sc == 401:
+            raise IntegrationError("Apollo authentication failed (401). Check your API key.")
+        if sc == 403:
+            raise IntegrationError(
+                "Apollo contacts search returned 403 Forbidden. "
+                "Verify your API key has CRM access at app.apollo.io → Settings → API."
+            )
+        if sc == 422:
+            raise IntegrationError("Apollo rejected the request (422). Verify API key permissions.")
+        raise IntegrationError(f"Apollo contacts search error ({sc}): {str(e)}")
+    except Exception as e:
+        raise IntegrationError(f"Apollo contacts search failed: {str(e)[:200]}")
+
+
+def create_apollo_contact(
+    config: ApolloConfig,
+    first_name: str,
+    last_name: str,
+    email: str,
+    title: str = "",
+    company: str = "",
+    linkedin_url: str = "",
+) -> str:
+    """
+    Create (or find existing) a contact in Apollo CRM.
+    Returns the Apollo contact_id string.
+    Raises IntegrationError on unrecoverable failure.
+    """
+    url = "https://api.apollo.io/v1/contacts"
+    headers = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": config.api_key,
+    }
+    payload: dict = {
+        "api_key": config.api_key,   # Apollo V1 requires key in body, not just header
+        "first_name": first_name,
+        "last_name": last_name,
+        "email": email,
+    }
+    if title:
+        payload["title"] = title
+    if company:
+        payload["organization_name"] = company
+    if linkedin_url:
+        payload["linkedin_url"] = linkedin_url
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        if resp.status_code == 200 or resp.status_code == 201:
+            data = resp.json()
+            contact = data.get("contact") or {}
+            contact_id = contact.get("id", "")
+            if not contact_id:
+                raise IntegrationError("Apollo create contact returned no contact ID.")
+            return contact_id
+        # 422 often means duplicate — try to extract existing contact_id from error body
+        if resp.status_code == 422:
+            try:
+                body = resp.json()
+                # Apollo may return existing contact_id in errors
+                errors = body.get("errors", {})
+                existing_ids = errors.get("contact_id") or errors.get("id") or []
+                if isinstance(existing_ids, list) and existing_ids:
+                    return str(existing_ids[0])
+                elif isinstance(existing_ids, str) and existing_ids:
+                    return existing_ids
+            except Exception:
+                pass
+            raise IntegrationError(f"Apollo contact creation rejected (422): {resp.text[:200]}")
+        resp.raise_for_status()
+        return ""
+    except IntegrationError:
+        raise
+    except requests.exceptions.ConnectionError:
+        raise IntegrationError("Cannot connect to Apollo.io for contact creation. Check network.")
+    except requests.exceptions.HTTPError as e:
+        sc = e.response.status_code if e.response is not None else "?"
+        if sc == 401:
+            raise IntegrationError("Apollo authentication failed (401). Check API key.")
+        raise IntegrationError(f"Apollo create contact error ({sc}): {str(e)[:150]}")
+    except Exception as e:
+        raise IntegrationError(f"Apollo contact creation failed: {str(e)[:200]}")
+
+
+def enroll_in_apollo_sequence(
+    config: ApolloConfig,
+    contact_id: str,
+    sequence_id: str,
+) -> bool:
+    """
+    Enroll an Apollo CRM contact in an email sequence (emailer_campaign).
+    Returns True if enrolled (or already enrolled).
+    Raises IntegrationError on unrecoverable failure.
+
+    The sequence stops automatically on reply (Apollo platform behaviour).
+    """
+    if not sequence_id:
+        raise IntegrationError("No Apollo sequence ID provided for enrollment.")
+    if not contact_id:
+        raise IntegrationError("No Apollo contact ID provided for enrollment.")
+
+    url = "https://api.apollo.io/v1/emailer_campaign_memberships"
+    headers = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache",
+        "X-Api-Key": config.api_key,
+    }
+    payload: dict = {
+        "api_key": config.api_key,   # Apollo V1 requires key in body, not just header
+        "emailer_campaign_id": sequence_id,
+        "contact_ids": [contact_id],
+    }
+    if config.email_account_id:
+        payload["send_email_from_email_account_id"] = config.email_account_id
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        if resp.status_code in (200, 201):
+            return True
+        if resp.status_code == 422:
+            # Often "already enrolled" — treat as success
+            try:
+                body = resp.json()
+                msg = str(body).lower()
+                if "already" in msg or "duplicate" in msg or "exists" in msg:
+                    return True
+            except Exception:
+                pass
+            raise IntegrationError(f"Apollo sequence enrollment rejected (422): {resp.text[:200]}")
+        resp.raise_for_status()
+        return True
+    except IntegrationError:
+        raise
+    except requests.exceptions.ConnectionError:
+        raise IntegrationError("Cannot connect to Apollo.io for sequence enrollment. Check network.")
+    except requests.exceptions.HTTPError as e:
+        sc = e.response.status_code if e.response is not None else "?"
+        if sc == 401:
+            raise IntegrationError("Apollo authentication failed (401). Check API key.")
+        raise IntegrationError(f"Apollo sequence enrollment error ({sc}): {str(e)[:150]}")
+    except Exception as e:
+        raise IntegrationError(f"Apollo sequence enrollment failed: {str(e)[:200]}")
+
+
 def test_apollo_connection(config: ApolloConfig) -> dict:
     """
-    Test Apollo connection with a minimal people search.
+    Test Apollo connection using /v1/contacts/search (free-plan compatible).
+    Returns the number of contacts found in the user's Apollo CRM.
     """
-    url = "https://api.apollo.io/v1/mixed_people/search"
+    url = "https://api.apollo.io/v1/contacts/search"
     headers = {
         "Content-Type": "application/json",
         "Cache-Control": "no-cache",
         "X-Api-Key": config.api_key,
     }
     try:
-        resp = requests.post(url, json={"per_page": 1, "page": 1}, headers=headers, timeout=15)
+        resp = requests.post(
+            url,
+            json={"api_key": config.api_key, "per_page": 1, "page": 1},
+            headers=headers,
+            timeout=15,
+        )
         resp.raise_for_status()
         data = resp.json()
-        credits = data.get("partial_results_limit", "unknown")
+        total = data.get("pagination", {}).get("total_entries", 0)
         return {
             "success": True,
-            "message": f"Connected to Apollo.io successfully. Credits available: {credits}",
+            "message": f"Connected to Apollo.io. {total} contacts in your CRM.",
         }
     except requests.exceptions.HTTPError as e:
         status = e.response.status_code if e.response is not None else "?"
         if status == 401:
-            return {"success": False, "message": "Invalid Apollo API key (401)."}
+            return {"success": False, "message": "Invalid Apollo API key (401). Check your key at app.apollo.io."}
+        if status == 403:
+            return {"success": False, "message": "Apollo access denied (403). Verify your API key at app.apollo.io → Settings → API."}
         return {"success": False, "message": f"Apollo returned HTTP {status}"}
     except Exception as e:
         return {"success": False, "message": str(e)[:200]}

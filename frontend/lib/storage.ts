@@ -8,6 +8,7 @@ import {
   SalesNavigatorConfig,
   HubSpotConfig,
   PhantomBusterConfig,
+  ImageGenConfig,
   AgentRunStatus,
   LogEntry,
   LS_LLM_CONFIG,
@@ -24,6 +25,7 @@ import {
   LS_SALES_NAVIGATOR_CONFIG,
   LS_HUBSPOT_CONFIG,
   LS_PHANTOMBUSTER_CONFIG,
+  LS_IMAGE_GEN_CONFIG,
 } from '../types';
 
 const isBrowser = typeof window !== 'undefined';
@@ -242,6 +244,30 @@ export function setPhantomBusterConfig(config: PhantomBusterConfig): void {
 export function clearPhantomBusterConfig(): void {
   if (!isBrowser) return;
   localStorage.removeItem(LS_PHANTOMBUSTER_CONFIG);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Image Generation Configuration
+// ─────────────────────────────────────────────────────────────
+
+export function getImageGenConfig(): ImageGenConfig | null {
+  if (!isBrowser) return null;
+  try {
+    const raw = localStorage.getItem(LS_IMAGE_GEN_CONFIG);
+    return raw ? (JSON.parse(raw) as ImageGenConfig) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setImageGenConfig(config: ImageGenConfig): void {
+  if (!isBrowser) return;
+  localStorage.setItem(LS_IMAGE_GEN_CONFIG, JSON.stringify(config));
+}
+
+export function clearImageGenConfig(): void {
+  if (!isBrowser) return;
+  localStorage.removeItem(LS_IMAGE_GEN_CONFIG);
 }
 
 // ─────────────────────────────────────────────────────────────

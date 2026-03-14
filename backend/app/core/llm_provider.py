@@ -239,7 +239,7 @@ def call_llm(config: LLMConfig, system_prompt: str, user_prompt: str) -> str:
         raise LLMError(f"Unknown provider: {config.provider}. Use 'openai', 'gemini', 'anthropic', 'grok', or 'groq'.")
 
 
-def generate_image_openai(api_key: str, prompt: str, size: str = "1024x1024") -> str:
+def generate_image_openai(api_key: str, prompt: str, model: str = "dall-e-3", size: str = "1024x1024") -> str:
     """
     Generate an image with DALL-E 3. Returns the temporary image URL.
     Only works when the LLM provider is OpenAI.
@@ -249,7 +249,7 @@ def generate_image_openai(api_key: str, prompt: str, size: str = "1024x1024") ->
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
         response = client.images.generate(
-            model="dall-e-3",
+            model=model,
             prompt=prompt,
             size=size,
             quality="standard",
@@ -260,9 +260,11 @@ def generate_image_openai(api_key: str, prompt: str, size: str = "1024x1024") ->
         raise LLMError(f"DALL-E image generation error: {e}") from e
 
 
-def generate_image_gemini(api_key: str, prompt: str) -> str:
+def generate_image_gemini(api_key: str, prompt: str, model: str = "gemini-2.0-flash-exp-image-generation") -> str:
     """
-    Generate an image with Gemini (gemini-2.0-flash-exp-image-generation).
+    Generate an image with Gemini. Supports two model types:
+    - gemini-2.0-flash-exp-image-generation → uses generate_content() API
+    - imagen-3.0-generate-002 → uses generate_images() API
     Returns a data URI string: "data:image/png;base64,<b64data>"
     Raises LLMError on failure.
     """
@@ -271,41 +273,99 @@ def generate_image_gemini(api_key: str, prompt: str) -> str:
         from google import genai
         from google.genai import types
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-exp-image-generation",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_modalities=["image", "text"],
-            ),
-        )
-        for part in response.candidates[0].content.parts:
-            if part.inline_data is not None:
-                mime_type = part.inline_data.mime_type or "image/png"
-                b64 = base64.b64encode(part.inline_data.data).decode("utf-8")
-                return f"data:{mime_type};base64,{b64}"
-        raise LLMError("Gemini image generation returned no image data.")
+
+        if model.startswith("imagen"):
+            # Imagen 3 uses the dedicated generate_images API
+            response = client.models.generate_images(
+                model=model,
+                prompt=prompt,
+                config=types.GenerateImagesConfig(number_of_images=1),
+            )
+            img = response.generated_images[0]
+            b64 = base64.b64encode(img.image.image_bytes).decode("utf-8")
+            return f"data:image/png;base64,{b64}"
+        else:
+            # Gemini Flash experimental image generation
+            # Note: google-genai SDK 1.x requires uppercase "IMAGE" for response_modalities
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_modalities=["IMAGE"],
+                ),
+            )
+            for part in response.candidates[0].content.parts:
+                if part.inline_data is not None:
+                    mime_type = part.inline_data.mime_type or "image/png"
+                    b64 = base64.b64encode(part.inline_data.data).decode("utf-8")
+                    return f"data:{mime_type};base64,{b64}"
+            raise LLMError("Gemini image generation returned no image data.")
     except LLMError:
         raise
     except Exception as e:
         raise LLMError(f"Gemini image generation error: {e}") from e
 
 
+_GEMINI_IMAGE_MODELS = {"gemini-2.0-flash-exp-image-generation", "imagen-3.0-generate-002"}
+_OPENAI_IMAGE_MODELS = {"dall-e-3", "dall-e-2"}
+
+
+def generate_image_ideogram(api_key: str, prompt: str) -> str:
+    """
+    Generate an image with Ideogram v3. Returns a public image URL.
+    Uses multipart/form-data POST (matching curl --form) to the Ideogram v3 API.
+    Raises LLMError on failure.
+    """
+    try:
+        import requests as _requests
+        url = "https://api.ideogram.ai/v1/ideogram-v3/generate"
+        headers = {"Api-Key": api_key}
+        # Use files= to send multipart/form-data (same as curl --form)
+        files = {
+            "prompt": (None, prompt),
+            "rendering_speed": (None, "TURBO"),
+        }
+        response = _requests.post(url, headers=headers, files=files, timeout=60)
+        if not response.ok:
+            try:
+                detail = response.json()
+            except Exception:
+                detail = response.text[:300]
+            raise LLMError(f"Ideogram API error ({response.status_code}): {detail}")
+        result = response.json()
+        images = result.get("data", [])
+        if not images:
+            raise LLMError("Ideogram returned no images in response.")
+        return images[0]["url"]
+    except LLMError:
+        raise
+    except Exception as e:
+        raise LLMError(f"Ideogram image generation error: {e}") from e
+
+
 def generate_image(config: LLMConfig, prompt: str) -> str:
     """
     Generate an image using the configured LLM provider.
     - OpenAI → DALL-E 3, returns a temporary URL
-    - Gemini → gemini-2.0-flash-exp-image-generation, returns a data URI
+    - Gemini → gemini-2.0-flash-exp or Imagen 3, returns a data URI
+    - Ideogram → ideogram-v3, returns a public URL
+    If the config model is a text model (e.g. gemini-2.0-flash), automatically
+    selects the correct image model for that provider.
     Raises LLMError if provider does not support image generation or on failure.
     """
     provider = config.provider.lower()
     if provider == "openai":
-        return generate_image_openai(config.api_key, prompt)
+        img_model = config.model if config.model in _OPENAI_IMAGE_MODELS else "dall-e-3"
+        return generate_image_openai(config.api_key, prompt, model=img_model)
     elif provider == "gemini":
-        return generate_image_gemini(config.api_key, prompt)
+        img_model = config.model if config.model in _GEMINI_IMAGE_MODELS else "gemini-2.0-flash-exp-image-generation"
+        return generate_image_gemini(config.api_key, prompt, model=img_model)
+    elif provider == "ideogram":
+        return generate_image_ideogram(config.api_key, prompt)
     else:
         raise LLMError(
             f"Image generation is not supported for provider '{config.provider}'. "
-            "Use 'openai' (DALL-E 3) or 'gemini' (Gemini Flash image generation)."
+            "Use 'openai' (DALL-E 3), 'gemini' (Gemini / Imagen), or 'ideogram' (Ideogram v3)."
         )
 
 

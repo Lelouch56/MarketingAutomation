@@ -33,13 +33,17 @@ export interface OutplayConfig {
   clientId: string;      // ?client_id= query param
   userId: string;        // Outplay user ID (required for sequence enrollment)
   location: string;      // Regional server, e.g. "us4"
-  sequenceIdA: string;   // Numeric sequence ID — Qualified Lead Marktech (score > 70)
-  sequenceIdB: string;   // Numeric sequence ID — Personal Lead Marktech (Gmail/Yahoo/etc.)
+  sequenceIdA: string;   // Numeric sequence ID — Qualified Lead Marktech (Agent 2, score > 70)
+  sequenceIdB: string;   // Numeric sequence ID — Personal Lead Marktech (Agent 2, Gmail/Yahoo/etc.)
+  sequenceIdC: string;   // Numeric sequence ID — Travel Tech Outreach (Agent 3, Matters broad)
 }
 
 export interface ApolloConfig {
   apiKey: string;
   perPage: number;
+  sequenceIdOta: string;      // Apollo ICP1 sequence — OTA / Travel Tech / TMC
+  sequenceIdHotels: string;   // Apollo ICP2 sequence — Bedbank / Hotel Wholesaler / Hotel Distribution
+  emailAccountId: string;     // Apollo mailbox ID used to send sequence emails
 }
 
 export interface SalesNavigatorConfig {
@@ -63,7 +67,7 @@ export interface PhantomBusterConfig {
 
 export const MODEL_OPTIONS: Record<LLMConfig['provider'], string[]> = {
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo'],
-  gemini: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-pro-exp-02-05'],
+  gemini: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash', 'gemini-2.0-pro-exp-02-05'],
   anthropic: ['claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307', 'claude-3-opus-20240229'],
   grok: ['grok-2', 'grok-2-latest'],
   groq: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'meta-llama/llama-4-scout-17b-16e-instruct'],
@@ -75,6 +79,29 @@ export const PROVIDER_LABELS: Record<LLMConfig['provider'], string> = {
   anthropic: 'Anthropic Claude',
   grok: 'xAI (Grok)',
   groq: 'Groq (Free Llama)',
+};
+
+// ─────────────────────────────────────────────────────────────
+// Image Generation Configuration (separate from text LLM)
+// ─────────────────────────────────────────────────────────────
+
+export interface ImageGenConfig {
+  provider: 'openai' | 'gemini' | 'ideogram';
+  apiKey: string;
+  model: string;
+  enabled: boolean;
+}
+
+export const IMAGE_GEN_MODEL_OPTIONS: Record<ImageGenConfig['provider'], string[]> = {
+  gemini: ['gemini-2.0-flash-exp-image-generation', 'imagen-3.0-generate-002'],
+  openai: ['dall-e-3'],
+  ideogram: ['ideogram-v3'],
+};
+
+export const IMAGE_GEN_PROVIDER_LABELS: Record<ImageGenConfig['provider'], string> = {
+  gemini: 'Google Gemini (Free)',
+  openai: 'OpenAI (DALL-E 3)',
+  ideogram: 'Ideogram (Free)',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -180,21 +207,48 @@ export interface OutreachTargetRecord {
   email: string;
   title?: string;
   company?: string;
-  company_type?: string;
+  company_type?: string;          // OTA | Bedbank | Hotel Wholesaler | TMC | Travel Tech | Hotel Distribution
   website?: string;
   linkedin_url?: string;
+  phone?: string;
   region?: string;
   employees?: string;
   relevance_reason?: string;
-  outreach_score?: number | null;       // AI outreach fit score 0-100
-  outreach_reason?: string;             // 2-sentence outreach rationale
-  connection_message?: string;          // personalized LinkedIn note ≤200 chars
-  is_dummy?: boolean;                   // true = AI-generated demo data (no real source), false = real profile
+  crm_tag?: string;               // "Qualified Lead" | "Travel Tech Prospect"
+  crm_tags?: string[];
+  outreach_score?: number | null;
+  outreach_reason?: string;
+  connection_message?: string;
+  is_dummy?: boolean;
+  source?: string;
+  lead_source?: string;             // "Apollo" | "Boolean Search" | "LinkedIn"
+  qualification_status?: string;    // "Qualified" | "Raw"
   status: 'raw' | 'filtered' | 'pending_approval' | 'approved';
+  apollo_enrolled?: boolean;
   klenty_enrolled?: boolean;
+  outplay_enrolled?: boolean;
   linkedin_status?: string;
   created_at?: string;
   approved_at?: string;
+}
+
+export interface RejectedProspectRecord {
+  id: string;
+  run_id?: string;
+  first_name?: string;
+  last_name?: string;
+  email: string;
+  title?: string;
+  company?: string;
+  company_type?: string;
+  linkedin_url?: string;
+  region?: string;
+  lead_source?: string;             // "Apollo" | "Boolean Search" | "LinkedIn"
+  source?: string;
+  is_dummy?: boolean;
+  removal_reason: 'duplicate_email' | 'off_target_role' | 'non_travel_tech';
+  removed_at?: string;
+  created_at?: string;
 }
 
 export interface ReportRecord {
@@ -264,3 +318,4 @@ export const LS_APOLLO_CONFIG = 'ma_apollo_config';
 export const LS_SALES_NAVIGATOR_CONFIG = 'ma_sales_navigator_config';
 export const LS_HUBSPOT_CONFIG = 'ma_hubspot_config';
 export const LS_PHANTOMBUSTER_CONFIG = 'ma_phantombuster_config';
+export const LS_IMAGE_GEN_CONFIG = 'ma_image_gen_config';

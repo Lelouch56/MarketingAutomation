@@ -19,6 +19,8 @@ import {
   IconButton,
   Tooltip,
   CircularProgress,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import { useState, useEffect } from 'react';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -42,8 +44,10 @@ import {
   setHubSpotConfig,
   getPhantomBusterConfig,
   setPhantomBusterConfig,
+  getImageGenConfig,
+  setImageGenConfig,
 } from '../../lib/storage';
-import { LLMConfig, LinkedInConfig, KlentyConfig, OutplayConfig, ApolloConfig, SalesNavigatorConfig, HubSpotConfig, PhantomBusterConfig, MODEL_OPTIONS, PROVIDER_LABELS } from '../../types';
+import { LLMConfig, LinkedInConfig, KlentyConfig, OutplayConfig, ApolloConfig, SalesNavigatorConfig, HubSpotConfig, PhantomBusterConfig, ImageGenConfig, MODEL_OPTIONS, PROVIDER_LABELS, IMAGE_GEN_MODEL_OPTIONS, IMAGE_GEN_PROVIDER_LABELS } from '../../types';
 import { integrationsApi } from '../../services/api';
 
 const OTHER_INTEGRATIONS = [
@@ -79,6 +83,16 @@ export default function SettingsPage() {
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [validation, setValidation] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Image Generation state
+  const [imgGenConfig, setImgGenConfig] = useState<ImageGenConfig>({
+    provider: 'gemini',
+    apiKey: '',
+    model: 'gemini-2.0-flash-exp-image-generation',
+    enabled: true,
+  });
+  const [imgGenShowKey, setImgGenShowKey] = useState(false);
+  const [imgGenSaved, setImgGenSaved] = useState(false);
 
   // LinkedIn state
   const [liConfig, setLiConfig] = useState<LinkedInConfig>({
@@ -117,6 +131,7 @@ export default function SettingsPage() {
     location: 'us4',
     sequenceIdA: '',
     sequenceIdB: '',
+    sequenceIdC: '',
   });
   const [outplaySaved, setOutplaySaved] = useState(false);
   const [outplayShowKey, setOutplayShowKey] = useState(false);
@@ -129,6 +144,9 @@ export default function SettingsPage() {
   const [apolloConfig, setApolloConfigState] = useState<ApolloConfig>({
     apiKey: '',
     perPage: 10,
+    sequenceIdOta: '',
+    sequenceIdHotels: '',
+    emailAccountId: '',
   });
   const [apolloSaved, setApolloSaved] = useState(false);
   const [apolloShowKey, setApolloShowKey] = useState(false);
@@ -182,13 +200,15 @@ export default function SettingsPage() {
     const existingOutplay = getOutplayConfig();
     if (existingOutplay) setOutplayConfigState((prev) => ({ ...prev, ...existingOutplay }));
     const existingApollo = getApolloConfig();
-    if (existingApollo) setApolloConfigState(existingApollo);
+    if (existingApollo) setApolloConfigState((prev) => ({ ...prev, ...existingApollo }));
     const existingSalesNav = getSalesNavigatorConfig();
     if (existingSalesNav) setSalesNavConfigState(existingSalesNav);
     const existingHubSpot = getHubSpotConfig();
     if (existingHubSpot) setHubSpotConfigState({ listId: '', ...existingHubSpot });
     const existingPb = getPhantomBusterConfig();
     if (existingPb) setPbConfigState(existingPb);
+    const existingImgGen = getImageGenConfig();
+    if (existingImgGen) setImgGenConfig(existingImgGen);
   }, []);
 
   // ── LLM handlers ──────────────────────────────────────────────
@@ -229,6 +249,21 @@ export default function SettingsPage() {
         message: `Key format looks valid for ${PROVIDER_LABELS[config.provider]}. It will be verified when running an agent.`,
       });
     }
+  };
+
+  // ── Image Gen handlers ──────────────────────────────────────────
+  const handleImgGenProviderChange = (provider: ImageGenConfig['provider']) => {
+    setImgGenConfig((prev) => ({
+      ...prev,
+      provider,
+      model: IMAGE_GEN_MODEL_OPTIONS[provider][0],
+    }));
+  };
+
+  const handleImgGenSave = () => {
+    setImageGenConfig(imgGenConfig);
+    setImgGenSaved(true);
+    setTimeout(() => setImgGenSaved(false), 3000);
   };
 
   // ── LinkedIn handlers ─────────────────────────────────────────
@@ -697,6 +732,100 @@ export default function SettingsPage() {
         </Box>
       </Paper>
 
+      {/* ──────────────────────── Image Generation Config ──────────────── */}
+      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+          <Typography variant="h6">Image Generation (Agent 1 — Hangout Social)</Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={imgGenConfig.enabled}
+                onChange={(e) => setImgGenConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
+              />
+            }
+            label={imgGenConfig.enabled ? 'Enabled' : 'Disabled'}
+          />
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Separate provider for LinkedIn post images. Allows using a free text LLM (e.g. Groq) while generating images with Gemini (also free).
+        </Typography>
+
+        {imgGenConfig.enabled && (
+          <>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Provider</InputLabel>
+                  <Select
+                    value={imgGenConfig.provider}
+                    label="Provider"
+                    onChange={(e) => handleImgGenProviderChange(e.target.value as ImageGenConfig['provider'])}
+                  >
+                    {(Object.keys(IMAGE_GEN_PROVIDER_LABELS) as ImageGenConfig['provider'][]).map((p) => (
+                      <MenuItem key={p} value={p}>{IMAGE_GEN_PROVIDER_LABELS[p]}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Model</InputLabel>
+                  <Select
+                    value={imgGenConfig.model}
+                    label="Model"
+                    onChange={(e) => setImgGenConfig((prev) => ({ ...prev, model: e.target.value }))}
+                  >
+                    {IMAGE_GEN_MODEL_OPTIONS[imgGenConfig.provider].map((m) => (
+                      <MenuItem key={m} value={m}>{m}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="API Key"
+                  type={imgGenShowKey ? 'text' : 'password'}
+                  value={imgGenConfig.apiKey}
+                  onChange={(e) => setImgGenConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
+                  placeholder={imgGenConfig.provider === 'gemini' ? 'AIzaSy...' : imgGenConfig.provider === 'ideogram' ? 'Ideogram API key...' : 'sk-...'}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={() => setImgGenShowKey(!imgGenShowKey)}>
+                          {imgGenShowKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Grid>
+            </Grid>
+            <Box display="flex" gap={2} mt={2} alignItems="center">
+              <Button variant="contained" size="small" onClick={handleImgGenSave} startIcon={imgGenSaved ? <CheckCircleIcon /> : undefined}>
+                {imgGenSaved ? 'Saved!' : 'Save Image Config'}
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                {imgGenConfig.provider === 'ideogram' ? (
+                  <>Get a free Ideogram key at{' '}<a href="https://ideogram.ai/manage-api" target="_blank" rel="noopener noreferrer">ideogram.ai/manage-api</a></>
+                ) : imgGenConfig.provider === 'gemini' ? (
+                  <>Get a free Gemini key at{' '}<a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com</a></>
+                ) : (
+                  <>Get an OpenAI key at{' '}<a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">platform.openai.com</a></>
+                )}
+              </Typography>
+            </Box>
+          </>
+        )}
+
+        {!imgGenConfig.enabled && (
+          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+            Agent 1 will use the main LLM config above for images (only works if the main provider is OpenAI or Gemini).
+          </Typography>
+        )}
+      </Paper>
+
       {/* ──────────────────────── Integrations Header ──────────────────── */}
       <Typography variant="h6" gutterBottom>Integrations</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -1032,6 +1161,16 @@ export default function SettingsPage() {
               helperText="For Personal Leads (Gmail, Yahoo, Outlook, etc.) — numeric ID from Outplay sequence URL"
             />
           </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Sequence C ID — Travel Tech Outreach (Matters broad)"
+              value={outplayConfig.sequenceIdC}
+              onChange={(e) => setOutplayConfigState((p) => ({ ...p, sequenceIdC: e.target.value }))}
+              fullWidth size="small"
+              placeholder="e.g. 51357"
+              helperText="Used by Agent 3 (Matters broad) for OTA / Bedbank / TMC / Travel Tech decision-maker outreach"
+            />
+          </Grid>
         </Grid>
 
         <Box display="flex" gap={2} mt={2.5} alignItems="center" flexWrap="wrap">
@@ -1084,8 +1223,9 @@ export default function SettingsPage() {
           </Box>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          Enables Agent 3 to fetch <strong>real B2B prospect profiles</strong> from Apollo.io instead of AI-generated dummy data.
-          Free tier provides 50 credits/month. Without this, Agent 3 falls back to LLM-generated prospect data.
+          Enables Agent 3 to fetch <strong>real B2B prospect profiles</strong> from Apollo.io and automatically
+          enroll them into outreach sequences. Configure your API key and the two ICP sequences below —
+          no Outplay or Klenty required; Apollo&apos;s built-in sequences handle the full campaign lifecycle.
         </Typography>
 
         <Grid container spacing={2}>
@@ -1119,6 +1259,36 @@ export default function SettingsPage() {
               helperText="Max prospects to fetch (1–25)"
             />
           </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Sequence ID — ICP1 OTA"
+              value={apolloConfig.sequenceIdOta}
+              onChange={(e) => setApolloConfigState((p) => ({ ...p, sequenceIdOta: e.target.value }))}
+              fullWidth size="small"
+              placeholder="e.g. 69b481adc8c6cb00151b8450"
+              helperText="For OTA / Travel Tech / TMC companies"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Sequence ID — ICP2 Hotels"
+              value={apolloConfig.sequenceIdHotels}
+              onChange={(e) => setApolloConfigState((p) => ({ ...p, sequenceIdHotels: e.target.value }))}
+              fullWidth size="small"
+              placeholder="e.g. 69b482d302534400215b74ec"
+              helperText="For Bedbank / Hotel Wholesaler / Hotel Distribution"
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Email Account ID (optional)"
+              value={apolloConfig.emailAccountId}
+              onChange={(e) => setApolloConfigState((p) => ({ ...p, emailAccountId: e.target.value }))}
+              fullWidth size="small"
+              placeholder="Apollo mailbox ID"
+              helperText="Apollo mailbox used to send sequence emails"
+            />
+          </Grid>
         </Grid>
 
         <Box display="flex" gap={2} mt={2.5} alignItems="center" flexWrap="wrap">
@@ -1142,11 +1312,12 @@ export default function SettingsPage() {
 
         <Divider sx={{ mt: 3, mb: 2 }} />
         <Typography variant="caption" color="text.secondary">
-          Get your free API key at{' '}
+          Get your API key at{' '}
           <a href="https://app.apollo.io/settings/integrations/api" target="_blank" rel="noopener noreferrer">
             app.apollo.io/settings/integrations/api
           </a>
-          {' '}· Free tier: 50 credits/month · No credit card required
+          {' '}· Find Sequence IDs in Apollo → Sequences → open a sequence → copy the ID from the URL
+          {' '}· Free tier: 50 credits/month
         </Typography>
       </Paper>
 
