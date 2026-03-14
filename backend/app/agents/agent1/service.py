@@ -262,7 +262,13 @@ def run_agent1_background(
             word_count = len(linkedin_data["post_text"].split())
             _update_step(2, "completed", f"Post written ({word_count} words)")
         else:
-            _update_step(2, "warning", "Post generation returned empty — will attempt publish anyway")
+            _update_step(2, "failed", "Post generation returned empty — skipping quality check, image, and LinkedIn publish")
+            _update_step(3, "skipped", "Skipped — no LinkedIn post was generated")
+            _update_step(4, "skipped", "Skipped — no LinkedIn post was generated")
+            _update_step(5, "skipped", "Skipped — no LinkedIn post was generated")
+            _update_step(6, "skipped", "Skipped — topic remains Pending")
+            _set_run_status("failed", error="LinkedIn post generation returned empty — no content published. Topic kept as Pending.")
+            return
         time.sleep(4)  # Throttle: stay within free-tier RPM limits
 
         # ── Step 3: Quality check ───────────────────────────────────────
@@ -310,14 +316,16 @@ def run_agent1_background(
                          f"Image generation requires OpenAI, Gemini, or Ideogram (current: {effective_img_config.provider})")
 
         # ── Step 5: Publish to LinkedIn ──────────────────────────────────
+        linkedin_published = False
         img_note = " + image" if image_url else ""
         _update_step(5, "running", f"Posting to LinkedIn{img_note}...")
         try:
             _step5_publish_linkedin(linkedin_data, li_config, image_url=image_url)
             _update_step(5, "completed", f"Posted to LinkedIn{img_note} successfully ✓")
+            linkedin_published = True
         except ValueError as e:
             # Config error (no token, no post text) — cannot recover
-            _update_step(5, "warning", str(e))
+            _update_step(5, "failed", str(e))
         except IntegrationError as e:
             if image_url:
                 # Image upload failed — retry posting text only
@@ -327,23 +335,30 @@ def run_agent1_background(
                     _step5_publish_linkedin(linkedin_data, li_config, image_url=None)
                     _update_step(5, "completed", f"Posted to LinkedIn (text only — image upload failed: {img_warn[:100]})")
                     image_url = None  # clear so step 6 saves correctly
+                    linkedin_published = True
                 except (ValueError, IntegrationError) as e2:
-                    _update_step(5, "warning", str(e2))
+                    _update_step(5, "failed", str(e2))
             else:
-                _update_step(5, "warning", str(e))
+                _update_step(5, "failed", str(e))
 
         # ── Step 6: Save results ─────────────────────────────────────────
         _update_step(6, "running", "Saving results...")
-        _step6_save_results(topic_dict, linkedin_data, image_url)
-        _update_step(6, "completed", "Topic marked Published, record saved")
+        if linkedin_published:
+            _step6_save_results(topic_dict, linkedin_data, image_url)
+            _update_step(6, "completed", "Topic marked Published, record saved ✓")
+        else:
+            _update_step(6, "completed", "Topic kept as Pending — LinkedIn post was not published")
 
-        _set_run_status("completed", result={
-            "topic": topic_dict["topic"],
-            "quality_score": quality_data.get("score"),
-            "quality_verdict": quality_data.get("verdict"),
-            "linkedin_post_length": len(linkedin_data.get("post_text", "")),
-            "image_generated": image_url is not None,
-        })
+        if linkedin_published:
+            _set_run_status("completed", result={
+                "topic": topic_dict["topic"],
+                "quality_score": quality_data.get("score"),
+                "quality_verdict": quality_data.get("verdict"),
+                "linkedin_post_length": len(linkedin_data.get("post_text", "")),
+                "image_generated": image_url is not None,
+            })
+        else:
+            _set_run_status("failed", error="LinkedIn post was not published — topic remains Pending.")
 
     except ValueError as e:
         current_step = next(

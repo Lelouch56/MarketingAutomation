@@ -39,6 +39,7 @@ from app.agents.agent3.service import (
     run_agent3_background, get_agent3_status,
     get_outreach_targets, approve_outreach_target,
     get_rejected_prospects, force_enroll_rejected_prospect,
+    retry_enroll_outreach_target,
 )
 from app.agents.agent4.service import (
     run_agent4_background, get_agent4_status,
@@ -582,6 +583,34 @@ def force_enroll_rejected(rejected_id: str, body: ApproveTargetRequest = Approve
         "info",
         f"Force-enroll rejected prospect {rejected_id[:8]}... "
         + ("enrolled in Outplay" if result["outplay_enrolled"] else f"— {result['message']}"),
+        agent_id="agent3",
+    )
+    return result
+
+
+@router.post("/agents/agent3/outreach-targets/{target_id}/enroll")
+def retry_enroll_target(target_id: str, body: ApproveTargetRequest = ApproveTargetRequest()):
+    """Retry Outplay enrollment for a prospect that was not enrolled or whose enrollment failed."""
+    outplay_config = None
+    if body.outplay:
+        outplay_config = OutplayConfig(
+            client_secret=body.outplay.client_secret,
+            client_id=body.outplay.client_id,
+            user_id=body.outplay.user_id,
+            location=body.outplay.location,
+            sequence_id_a=body.outplay.sequence_id_a,
+            sequence_id_b=body.outplay.sequence_id_b,
+            sequence_id_c=body.outplay.sequence_id_c,
+        )
+
+    result = retry_enroll_outreach_target(target_id, outplay_config)
+    if not result["found"]:
+        raise HTTPException(status_code=404, detail=f"Outreach target '{target_id}' not found.")
+
+    _append_log(
+        "info" if result["outplay_enrolled"] else "warning",
+        f"Retry enroll outreach target {target_id[:8]}... "
+        + ("enrolled in Outplay" if result["outplay_enrolled"] else f"failed — {result['message']}"),
         agent_id="agent3",
     )
     return result

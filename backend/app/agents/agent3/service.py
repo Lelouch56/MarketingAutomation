@@ -197,6 +197,8 @@ def approve_outreach_target(
                     name, t.get("email"), seq_id,
                 )
             except Exception as e:
+                t["outplay_enrolled"] = False
+                t["outplay_enroll_error"] = str(e)[:200]
                 logger.warning(
                     "Outplay enrollment on approve failed for %s: %s",
                     target_id[:8], str(e)[:150],
@@ -207,6 +209,67 @@ def approve_outreach_target(
         outreach_db.write(targets)
 
     return {"found": found, "outplay_enrolled": outplay_enrolled}
+
+
+def retry_enroll_outreach_target(
+    target_id: str,
+    outplay_config: Optional["OutplayConfig"] = None,
+) -> dict:
+    """Retry Outplay enrollment for a specific outreach target that failed or was not enrolled.
+
+    Clears any previous outplay_enroll_error on success.
+    Returns {'found': bool, 'outplay_enrolled': bool, 'message': str}.
+    """
+    targets = outreach_db.read()
+    found = False
+    outplay_enrolled = False
+    message = ""
+
+    for t in targets:
+        if t.get("id") != target_id:
+            continue
+        found = True
+
+        if t.get("outplay_enrolled"):
+            message = "Already enrolled in Outplay"
+            outplay_enrolled = True
+            break
+
+        if not _is_valid_email(t.get("email", "")):
+            message = "No valid email address on this prospect"
+            break
+
+        if not outplay_config:
+            message = "Outplay not configured — add credentials in Settings"
+            break
+
+        try:
+            name = f"{t.get('first_name', '')} {t.get('last_name', '')}".strip()
+            seq_id = outplay_config.sequence_id_c or outplay_config.sequence_id_a
+            add_prospect_to_outplay(
+                outplay_config,
+                email=t.get("email", ""),
+                name=name or None,
+                company=t.get("company"),
+                sequence_id=seq_id,
+            )
+            t["outplay_enrolled"] = True
+            t["outplay_enrolled_at"] = _now()
+            t.pop("outplay_enroll_error", None)  # clear previous error
+            outplay_enrolled = True
+            message = "Enrolled successfully in Outplay sequence"
+            logger.info("Retry enroll succeeded — %s <%s> → sequence %s", name, t.get("email"), seq_id)
+        except Exception as e:
+            t["outplay_enrolled"] = False
+            t["outplay_enroll_error"] = str(e)[:200]
+            message = str(e)[:200]
+            logger.warning("Retry enroll failed for %s: %s", target_id[:8], str(e)[:150])
+        break
+
+    if found:
+        outreach_db.write(targets)
+
+    return {"found": found, "outplay_enrolled": outplay_enrolled, "message": message}
 
 
 def force_enroll_rejected_prospect(
@@ -774,14 +837,17 @@ def _step6_campaign_execution(
                 )
                 t["outplay_enrolled"] = True
                 t["outplay_enrolled_at"] = _now()
+                t.pop("outplay_enroll_error", None)  # clear any previous error
                 outplay_enrolled += 1
                 updated = True
-            except IntegrationError:
+            except IntegrationError as e:
                 t["outplay_enrolled"] = False
+                t["outplay_enroll_error"] = str(e)[:200]
                 updated = True
             except Exception as e:
                 logger.error("Outplay enrollment error for %s: %s", t.get("email"), str(e)[:100])
                 t["outplay_enrolled"] = False
+                t["outplay_enroll_error"] = str(e)[:200]
                 updated = True
 
         # ── Tertiary: Klenty ──────────────────────────────────────────────

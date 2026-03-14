@@ -227,6 +227,7 @@ export interface OutreachTargetRecord {
   apollo_enrolled?: boolean;
   klenty_enrolled?: boolean;
   outplay_enrolled?: boolean;
+  outplay_enroll_error?: string;
   linkedin_status?: string;
   created_at?: string;
   approved_at?: string;

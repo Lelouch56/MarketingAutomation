@@ -216,6 +216,12 @@ export const agent3Api = {
     body?: Record<string, unknown>,
   ): Promise<{ found: boolean; outplay_enrolled: boolean; message: string }> =>
     http.post(`/agents/agent3/rejected-prospects/${rejectedId}/force-enroll`, body ?? {}).then((r) => r.data),
+
+  retryEnroll: (
+    targetId: string,
+    body?: Record<string, unknown>,
+  ): Promise<{ found: boolean; outplay_enrolled: boolean; message: string }> =>
+    http.post(`/agents/agent3/outreach-targets/${targetId}/enroll`, body ?? {}).then((r) => r.data),
 };
 
 // ─────────────────────────────────────────────────────────────

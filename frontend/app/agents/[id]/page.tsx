@@ -157,6 +157,7 @@ export default function AgentDetailPage() {
   const [runSuccess, setRunSuccess] = useState('');
   const [csvUploading, setCsvUploading] = useState(false);
   const [forcingEnrollId, setForcingEnrollId] = useState<string | null>(null);
+  const [retryingEnrollId, setRetryingEnrollId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Agent 1 LinkedIn toggle — only relevant when LinkedIn is configured
@@ -330,6 +331,36 @@ export default function AgentDetailPage() {
       setFormError(extractApiError(err));
     } finally {
       setForcingEnrollId(null);
+    }
+  };
+
+  const handleRetryEnroll = async (targetId: string) => {
+    setRetryingEnrollId(targetId);
+    try {
+      const outplayCfg = getOutplayConfig();
+      const body: Record<string, unknown> = {};
+      if (outplayCfg?.clientSecret) {
+        body.outplay = {
+          client_secret: outplayCfg.clientSecret,
+          client_id: outplayCfg.clientId || '',
+          user_id: outplayCfg.userId || '',
+          location: outplayCfg.location || 'us4',
+          sequence_id_a: outplayCfg.sequenceIdA || '',
+          sequence_id_b: outplayCfg.sequenceIdB || '',
+          sequence_id_c: outplayCfg.sequenceIdC || '',
+        };
+      }
+      const result = await agent3Api.retryEnroll(targetId, body);
+      setFormSuccess(
+        result.outplay_enrolled
+          ? '✓ Prospect enrolled in Outplay sequence'
+          : result.message || 'Enrollment failed — check Outplay config in Settings',
+      );
+      agent3Api.getOutreachTargets().then(setOutreachTargets);
+    } catch (err) {
+      setFormError(extractApiError(err));
+    } finally {
+      setRetryingEnrollId(null);
     }
   };
 
@@ -583,6 +614,52 @@ export default function AgentDetailPage() {
                         })) as unknown as Record<string, unknown>[]}
                         emptyMessage="No targets yet."
                       />
+
+                      {/* ── Not-Enrolled Prospects — Retry Enroll ─────── */}
+                      {(() => {
+                        const notEnrolled = outreachTargets.filter((t) => !t.outplay_enrolled && t.email);
+                        if (notEnrolled.length === 0) return null;
+                        return (
+                          <Box mt={3} p={2} sx={{ border: 1, borderColor: 'warning.main', borderRadius: 2 }}>
+                            <Typography variant="subtitle2" color="warning.dark" gutterBottom>
+                              Not Enrolled in Outplay ({notEnrolled.length})
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                              These prospects were not enrolled — either Outplay was not configured when the agent ran, or enrollment failed.
+                              Use <strong>Retry Enroll</strong> to attempt enrollment now.
+                            </Typography>
+                            {notEnrolled.map((t) => (
+                              <Box key={t.id} display="flex" alignItems="flex-start" gap={2} mb={1} p={1.5}
+                                bgcolor="background.paper" borderRadius={1} sx={{ border: 1, borderColor: 'divider' }}>
+                                <Box flex={1} minWidth={0}>
+                                  <Typography variant="body2" fontWeight={500} noWrap>
+                                    {[t.first_name, t.last_name].filter(Boolean).join(' ') || '(No name)'} — {t.title || '?'} at {t.company || '?'}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {t.email}{t.region ? ` · ${t.region}` : ''}
+                                  </Typography>
+                                  {t.outplay_enroll_error && (
+                                    <Typography variant="caption" color="error.main" display="block" sx={{ mt: 0.25 }}>
+                                      ⚠ {t.outplay_enroll_error}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color="warning"
+                                  startIcon={retryingEnrollId === t.id ? <CircularProgress size={12} color="inherit" /> : <CheckCircleIcon />}
+                                  onClick={() => handleRetryEnroll(t.id)}
+                                  disabled={!!retryingEnrollId}
+                                  sx={{ flexShrink: 0 }}
+                                >
+                                  Retry Enroll
+                                </Button>
+                              </Box>
+                            ))}
+                          </Box>
+                        );
+                      })()}
                     </Box>
                   )}
 
