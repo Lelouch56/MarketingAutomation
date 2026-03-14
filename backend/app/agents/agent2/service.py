@@ -448,11 +448,14 @@ def _step6_assign_campaigns(
 
         lead["processed_at"] = now
         lead["processed_run_id"] = run_id
-        lead["klenty_enrolled"] = False
-        lead["outplay_enrolled"] = False
+        # Preserve enrollment from previous runs — only reset if not already enrolled
+        if not lead.get("klenty_enrolled"):
+            lead["klenty_enrolled"] = False
+        if not lead.get("outplay_enrolled"):
+            lead["outplay_enrolled"] = False
 
-        # Auto-enroll in Klenty if config is provided and campaign applies
-        if klenty_config and klenty_campaign:
+        # Auto-enroll in Klenty if config is provided, campaign applies, and not already enrolled
+        if klenty_config and klenty_campaign and not lead.get("klenty_enrolled"):
             try:
                 add_prospect_to_klenty(
                     klenty_config,
@@ -471,8 +474,8 @@ def _step6_assign_campaigns(
                 logger.error("Unexpected error enrolling %s in Klenty: %s", lead.get("email"), str(e)[:100])
                 lead["klenty_enrolled"] = False
 
-        # Auto-enroll in Outplay if config is provided and sequence applies
-        if outplay_config and outplay_sequence:
+        # Auto-enroll in Outplay if config is provided, sequence applies, and not already enrolled
+        if outplay_config and outplay_sequence and not lead.get("outplay_enrolled"):
             try:
                 add_prospect_to_outplay(
                     outplay_config,

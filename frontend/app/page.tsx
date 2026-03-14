@@ -12,8 +12,6 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import TrendingDownIcon from '@mui/icons-material/TrendingDown';
-import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import AgentCard from '../components/agents/AgentCard';
 import { agent1Api, agent2Api, agent3Api, agent4Api } from '../services/api';
 import { useAgentPoller } from '../lib/hooks/useAgentPoller';
@@ -28,41 +26,6 @@ function Sparkline({ color, path }: { color: string; path: string }) {
   );
 }
 
-const KPI_CARDS = [
-  {
-    label: 'Total Leads',
-    value: '1,284',
-    icon: GroupIcon,
-    iconBg: '#EFF6FF',
-    iconColor: '#2563EB',
-    trend: '+12%',
-    trendUp: true,
-    sparkColor: '#10b981',
-    sparkPath: 'M0 15 L10 12 L20 14 L30 8 L40 10 L50 5 L60 7 L70 3 L80 6 L90 2 L100 4',
-  },
-  {
-    label: 'Active Campaigns',
-    value: '24',
-    icon: RocketLaunchIcon,
-    iconBg: '#FAF5FF',
-    iconColor: '#9333EA',
-    trend: 'Stable',
-    trendUp: null,
-    sparkColor: '#94a3b8',
-    sparkPath: 'M0 10 L20 10 L40 11 L60 10 L80 10 L100 11',
-  },
-  {
-    label: 'Social Engagement',
-    value: '85.4%',
-    icon: ThumbUpIcon,
-    iconBg: '#FFF7ED',
-    iconColor: '#EA580C',
-    trend: '-2.1%',
-    trendUp: false,
-    sparkColor: '#f43f5e',
-    sparkPath: 'M0 5 L15 8 L30 12 L45 10 L60 15 L75 13 L90 18 L100 16',
-  },
-];
 
 const QUICK_ACTIONS = [
   { label: 'Create Campaign', icon: AddCircleIcon, href: null },
@@ -77,6 +40,9 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [hasConfig, setHasConfig] = useState(false);
+  const [kpiLeads, setKpiLeads] = useState<number | null>(null);
+  const [kpiBlogs, setKpiBlogs] = useState<number | null>(null);
+  const [kpiEnrolled, setKpiEnrolled] = useState<number | null>(null);
 
   const { status: a1Status, isPolling: a1Running, startPolling: startA1, setStatus: setA1Status } =
     useAgentPoller({ agentId: 'agent1', fetchStatus: agent1Api.getStatus });
@@ -95,6 +61,12 @@ export default function Dashboard() {
     const s3 = getAgentState('agent3'); if (s3) setA3Status(s3);
     const s4 = getAgentState('agent4'); if (s4) setA4Status(s4);
   }, [setA1Status, setA2Status, setA3Status, setA4Status]);
+
+  useEffect(() => {
+    agent2Api.getLeads().then(ls => setKpiLeads(ls.length)).catch(() => {});
+    agent1Api.getTopics().then(ts => setKpiBlogs(ts.filter(t => t.status === 'Published').length)).catch(() => {});
+    agent3Api.getOutreachTargets().then(ts => setKpiEnrolled(ts.filter(t => t.outplay_enrolled).length)).catch(() => {});
+  }, []);
 
   const handleRunAgent1 = useCallback(async () => {
     const config = getLLMConfig();
@@ -178,28 +150,23 @@ export default function Dashboard() {
 
       {/* ── KPI Stats Row ── */}
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-        {KPI_CARDS.map(({ label, value, icon: Icon, iconBg, iconColor, trend, trendUp, sparkColor, sparkPath }) => (
+        {[
+          { label: 'Total Leads', value: kpiLeads !== null ? kpiLeads.toLocaleString() : '–', icon: GroupIcon, iconBg: '#EFF6FF', iconColor: '#2563EB', sparkColor: '#10b981', sparkPath: 'M0 15 L10 12 L20 14 L30 8 L40 10 L50 5 L60 7 L70 3 L80 6 L90 2 L100 4' },
+          { label: 'Blogs Published', value: kpiBlogs !== null ? kpiBlogs.toString() : '–', icon: RocketLaunchIcon, iconBg: '#FAF5FF', iconColor: '#9333EA', sparkColor: '#9333EA', sparkPath: 'M0 15 L15 12 L30 10 L45 7 L60 8 L75 5 L90 4 L100 3' },
+          { label: 'Outplay Enrolled', value: kpiEnrolled !== null ? kpiEnrolled.toString() : '–', icon: ThumbUpIcon, iconBg: '#ECFDF5', iconColor: '#059669', sparkColor: '#10b981', sparkPath: 'M0 18 L15 14 L30 12 L45 9 L60 10 L75 7 L90 5 L100 4' },
+        ].map(({ label, value, icon: Icon, iconBg, iconColor, sparkColor, sparkPath }) => (
           <Grid item xs={12} sm={4} key={label}>
             <Paper
               elevation={0}
-              sx={{
-                p: 2.5,
-                border: '1px solid rgba(23,84,207,0.08)',
-                borderRadius: '12px',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
-              }}
+              sx={{ p: 2.5, border: '1px solid rgba(23,84,207,0.08)', borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}
             >
               <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
                 <Box sx={{ width: 40, height: 40, bgcolor: iconBg, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Icon sx={{ color: iconColor, fontSize: 20 }} />
                 </Box>
                 <Box display="flex" alignItems="center" gap={0.3}>
-                  {trendUp === true && <TrendingUpIcon sx={{ fontSize: 14, color: '#059669' }} />}
-                  {trendUp === false && <TrendingDownIcon sx={{ fontSize: 14, color: '#f43f5e' }} />}
-                  {trendUp === null && <HorizontalRuleIcon sx={{ fontSize: 14, color: '#94a3b8' }} />}
-                  <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: trendUp === true ? '#059669' : trendUp === false ? '#f43f5e' : '#94a3b8' }}>
-                    {trend}
-                  </Typography>
+                  <TrendingUpIcon sx={{ fontSize: 14, color: '#059669' }} />
+                  <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: '#059669' }}>Live</Typography>
                 </Box>
               </Box>
               <Typography sx={{ fontSize: 12.5, fontWeight: 500, color: 'text.secondary', mb: 0.5 }}>{label}</Typography>

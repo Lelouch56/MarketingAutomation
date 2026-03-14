@@ -135,6 +135,79 @@ const AGENT_ICON_MAP: Record<string, { icon: React.ElementType; color: string; b
   agent4: { icon: VisibilityIcon, color: '#059669', bg: '#ECFDF5' },
 };
 
+// ── Chart helpers for Ringside View ──────────────────────────────────────
+function BarChartH({ data }: { data: { label: string; value: number; color: string }[] }) {
+  const max = Math.max(...data.map(d => d.value), 1);
+  return (
+    <Box>
+      {data.map(({ label, value, color }) => (
+        <Box key={label} mb={1.5}>
+          <Box display="flex" justifyContent="space-between" mb={0.4}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{label}</Typography>
+            <Typography variant="caption" fontWeight={700} color="text.primary">{value}</Typography>
+          </Box>
+          <Box sx={{ height: 10, bgcolor: 'rgba(0,0,0,0.06)', borderRadius: 5, overflow: 'hidden' }}>
+            <Box sx={{
+              height: '100%',
+              width: `${Math.max((value / max) * 100, value > 0 ? 3 : 0)}%`,
+              bgcolor: color,
+              borderRadius: 5,
+              transition: 'width 0.6s ease',
+            }} />
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+function FunnelChart({ stages }: { stages: { label: string; value: number; sublabel?: string; color: string }[] }) {
+  const max = Math.max(...stages.map(s => s.value), 1);
+  return (
+    <Box>
+      {stages.map(({ label, value, sublabel, color }, i) => {
+        const pct = Math.max((value / max) * 100, value > 0 ? 8 : 0);
+        return (
+          <Box key={label} mb={i < stages.length - 1 ? 0.5 : 0}>
+            <Box display="flex" alignItems="center" gap={1.5}>
+              <Box sx={{ width: 140, flexShrink: 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, lineHeight: 1.3, display: 'block' }}>
+                  {label}
+                </Typography>
+                {sublabel && (
+                  <Typography variant="caption" sx={{ fontSize: 10, opacity: 0.65, display: 'block', lineHeight: 1.2 }}>{sublabel}</Typography>
+                )}
+              </Box>
+              <Box sx={{ flex: 1, height: 30, bgcolor: 'rgba(0,0,0,0.05)', borderRadius: 2, overflow: 'hidden' }}>
+                <Box sx={{
+                  height: '100%',
+                  width: `${pct}%`,
+                  bgcolor: color,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  px: 1.5,
+                  transition: 'width 0.7s ease',
+                  minWidth: value > 0 ? 32 : 0,
+                }}>
+                  <Typography variant="caption" fontWeight={700} sx={{ color: 'white', textShadow: '0 1px 2px rgba(0,0,0,0.3)', whiteSpace: 'nowrap' }}>
+                    {value}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+            {i < stages.length - 1 && (
+              <Box sx={{ ml: '155px', lineHeight: 1 }}>
+                <Typography sx={{ fontSize: 10, color: 'text.disabled', lineHeight: 1.2 }}>▼</Typography>
+              </Box>
+            )}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <Paper
@@ -167,6 +240,7 @@ export default function AgentDetailPage() {
   const [outreachTargets, setOutreachTargets] = useState<OutreachTargetRecord[]>([]);
   const [rejectedProspects, setRejectedProspects] = useState<RejectedProspectRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
+  const [a4Leads, setA4Leads] = useState<LeadRecord[]>([]);
   const [newTopicText, setNewTopicText] = useState('');
   const [newLeadEmail, setNewLeadEmail] = useState('');
   const [newLeadWebsite, setNewLeadWebsite] = useState('');
@@ -217,7 +291,10 @@ export default function AgentDetailPage() {
     else if (isAgent3) {
       agent3Api.getOutreachTargets().then(setOutreachTargets).catch(() => { });
       agent3Api.getRejectedProspects().then(setRejectedProspects).catch(() => { });
-    } else if (isAgent4) agent4Api.getReports().then(setReports).catch(() => { });
+    } else if (isAgent4) {
+      agent4Api.getReports().then(setReports).catch(() => { });
+      agent2Api.getLeads().then(setA4Leads).catch(() => { });
+    }
   }, [id, isImplemented, isAgent1, isAgent2, isAgent3, isAgent4, agentId, setStatus, startPolling]);
 
   useEffect(() => {
@@ -231,7 +308,10 @@ export default function AgentDetailPage() {
         agent3Api.getOutreachTargets().then(setOutreachTargets);
         agent3Api.getRejectedProspects().then(setRejectedProspects);
       }
-      if (isAgent4) agent4Api.getReports().then(setReports);
+      if (isAgent4) {
+        agent4Api.getReports().then(setReports);
+        agent2Api.getLeads().then(setA4Leads);
+      }
     }
   }, [status?.status, isAgent1, isAgent2, isAgent3, isAgent4]);
 
@@ -775,6 +855,70 @@ export default function AgentDetailPage() {
               )}
               {tabValue === 0 && isAgent4 && (
                 <Box>
+                  {/* ── Charts Section ─────────────────────────────── */}
+                  {(() => {
+                    const latestReport = reports[reports.length - 1];
+                    const funnel = latestReport?.funnel_summary;
+                    const campaignData = [
+                      { label: 'Qualified (Seq A)', value: a4Leads.filter(l => l.campaign === 'A').length, color: '#10b981' },
+                      { label: 'Personal (Seq B)', value: a4Leads.filter(l => l.campaign === 'B').length, color: '#3b82f6' },
+                      { label: 'Nurture', value: a4Leads.filter(l => l.campaign === 'nurture').length, color: '#f59e0b' },
+                      { label: 'Disqualified', value: a4Leads.filter(l => (l.campaign as string) === 'disqualified').length, color: '#ef4444' },
+                    ].filter(d => d.value > 0);
+                    const funnelStages = funnel ? [
+                      { label: 'Total Leads', sublabel: 'Agent 2 input', value: funnel.total_leads, color: '#3b82f6' },
+                      { label: 'Qualified Leads', sublabel: 'Seq A eligible', value: funnel.qualified_leads, color: '#8b5cf6' },
+                      { label: 'Outplay Enrolled', sublabel: 'Active sequences', value: (funnel.sequence_a_enrolled ?? 0) + (funnel.sequence_b_enrolled ?? 0), color: '#10b981' },
+                      { label: 'Outreach Targets', sublabel: 'Agent 3 prospects', value: funnel.outreach_targets, color: '#f59e0b' },
+                      { label: 'Blogs Published', sublabel: 'Agent 1 content', value: funnel.blogs_published, color: '#ea580c' },
+                    ] : [];
+                    if (!funnel && campaignData.length === 0) return null;
+                    return (
+                      <Box mb={3}>
+                        <Grid container spacing={2.5}>
+                          {funnelStages.length > 0 && (
+                            <Grid item xs={12} md={7}>
+                              <Paper elevation={0} sx={{ p: 2.5, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px', height: '100%' }}>
+                                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                                  <Typography variant="subtitle2" fontWeight={700}>Marketing Funnel</Typography>
+                                  {latestReport?.health_score !== undefined && (
+                                    <Box sx={{ px: 1.5, py: 0.3, bgcolor: (latestReport.health_score ?? 0) >= 70 ? '#ECFDF5' : (latestReport.health_score ?? 0) >= 40 ? '#FEF3C7' : '#FEF2F2', borderRadius: 10 }}>
+                                      <Typography variant="caption" fontWeight={700} color={(latestReport.health_score ?? 0) >= 70 ? '#059669' : (latestReport.health_score ?? 0) >= 40 ? '#D97706' : '#DC2626'}>
+                                        Health: {latestReport.health_score}/100 · {latestReport.health_rating ?? '–'}
+                                      </Typography>
+                                    </Box>
+                                  )}
+                                </Box>
+                                <FunnelChart stages={funnelStages} />
+                                {funnel?.conversion_rate_pct !== undefined && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+                                    Conversion rate (leads → qualified): <strong>{funnel.conversion_rate_pct.toFixed(1)}%</strong>
+                                  </Typography>
+                                )}
+                              </Paper>
+                            </Grid>
+                          )}
+                          {campaignData.length > 0 && (
+                            <Grid item xs={12} md={funnelStages.length > 0 ? 5 : 12}>
+                              <Paper elevation={0} sx={{ p: 2.5, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px', height: '100%' }}>
+                                <Typography variant="subtitle2" fontWeight={700} mb={2}>Lead Campaign Distribution</Typography>
+                                <BarChartH data={campaignData} />
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+                                  Total leads processed: <strong>{a4Leads.length}</strong>
+                                </Typography>
+                              </Paper>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Box>
+                    );
+                  })()}
+                  {/* ── Reports Table ─────────────────────────────── */}
+                  {reports.length > 0 && (
+                    <Box mb={1.5}>
+                      <Typography variant="subtitle2" fontWeight={700}>Generated Reports</Typography>
+                    </Box>
+                  )}
                   <ResultsTable
                     columns={REPORT_COLUMNS}
                     rows={reports as unknown as Record<string, unknown>[]}
