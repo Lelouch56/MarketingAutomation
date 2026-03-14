@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import {
   Box,
   Grid,
@@ -25,6 +26,10 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DownloadIcon from '@mui/icons-material/Download';
+import WorkIcon from '@mui/icons-material/Work';
+import DashboardCustomizeIcon from '@mui/icons-material/DashboardCustomize';
+import ForumIcon from '@mui/icons-material/Forum';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import StepperFlow from '../../../components/agents/StepperFlow';
@@ -123,16 +128,32 @@ const AGENT_META: Record<string, { name: string; description: string; steps: num
   },
 };
 
+const AGENT_ICON_MAP: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+  agent1: { icon: ForumIcon, color: '#EA580C', bg: '#FFF7ED' },
+  agent2: { icon: WorkIcon, color: '#2563EB', bg: '#EFF6FF' },
+  agent3: { icon: DashboardCustomizeIcon, color: '#9333EA', bg: '#FAF5FF' },
+  agent4: { icon: VisibilityIcon, color: '#059669', bg: '#ECFDF5' },
+};
+
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <Card elevation={0} variant="outlined" sx={{ textAlign: 'center', p: 1.5 }}>
-      <Typography variant="h5" fontWeight={700} color="primary.main">
+    <Paper
+      elevation={0}
+      sx={{
+        textAlign: 'center',
+        p: 2,
+        border: '1px solid rgba(23,84,207,0.1)',
+        borderRadius: '12px',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+      }}
+    >
+      <Typography sx={{ fontSize: 24, fontWeight: 700, color: 'primary.main', lineHeight: 1.2 }}>
         {value}
       </Typography>
-      <Typography variant="caption" color="text.secondary">
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
         {label}
       </Typography>
-    </Card>
+    </Paper>
   );
 }
 
@@ -398,18 +419,37 @@ export default function AgentDetailPage() {
 
   return (
     <Box>
-      <Button startIcon={<ArrowBackIcon />} onClick={() => router.push('/agents')} sx={{ mb: 2 }} size="small">
+      <Button
+        startIcon={<ArrowBackIcon />}
+        onClick={() => router.push('/agents')}
+        size="small"
+        sx={{ mb: 2.5, textTransform: 'none', fontWeight: 600, color: 'text.secondary', '&:hover': { bgcolor: 'rgba(23,84,207,0.05)' } }}
+      >
         All Agents
       </Button>
 
-      <Box display="flex" alignItems="center" gap={2} flexWrap="wrap" mb={1}>
-        <Typography variant="h4">{meta.name}</Typography>
-        <StatusBadge status={isPolling ? 'running' : (status?.status ?? 'idle')} size="medium" />
+      <Box display="flex" alignItems="flex-start" gap={2} flexWrap="wrap" mb={1}>
+        {AGENT_ICON_MAP[id] && (() => {
+          const cfg = AGENT_ICON_MAP[id];
+          const AgentIcon = cfg.icon;
+          return (
+            <Box sx={{ width: 48, height: 48, bgcolor: cfg.bg, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <AgentIcon sx={{ color: cfg.color, fontSize: 24 }} />
+            </Box>
+          );
+        })()}
+        <Box>
+          <Box display="flex" alignItems="center" gap={1.5} mb={0.25}>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>{meta.name}</Typography>
+            <StatusBadge status={isPolling ? 'running' : (status?.status ?? 'idle')} size="medium" />
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 700 }}>
+            {meta.description}
+          </Typography>
+        </Box>
       </Box>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 700 }}>
-        {meta.description}
-      </Typography>
+      <Box sx={{ mb: 3 }} />
 
       {runError && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setRunError('')}>{runError}</Alert>
@@ -516,9 +556,9 @@ export default function AgentDetailPage() {
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
-          <Paper elevation={0} variant="outlined" sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" gutterBottom>Workflow Steps</Typography>
-            <Divider sx={{ mb: 2 }} />
+          <Paper elevation={0} sx={{ p: 3, height: '100%', border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5 }}>Workflow Steps</Typography>
+            <Divider sx={{ mb: 2, borderColor: 'rgba(23,84,207,0.08)' }} />
             <StepperFlow steps={status?.steps ?? []} />
             {status?.result && (
               <Box mt={3} p={2} bgcolor="action.hover" borderRadius={2}>
@@ -539,9 +579,18 @@ export default function AgentDetailPage() {
         </Grid>
 
         <Grid item xs={12} md={8}>
-          <Paper elevation={0} variant="outlined">
-            <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}
-              sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+          <Paper elevation={0} sx={{ border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px', overflow: 'hidden' }}>
+            <Tabs
+              value={tabValue}
+              onChange={(_, v) => setTabValue(v)}
+              sx={{
+                borderBottom: '1px solid rgba(23,84,207,0.1)',
+                px: 2,
+                '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, fontSize: 13 },
+                '& .Mui-selected': { color: 'primary.main' },
+                '& .MuiTabs-indicator': { bgcolor: 'primary.main' },
+              }}
+            >
               <Tab label={
                 isAgent1 ? 'Topics & Results' :
                   isAgent2 ? 'Leads & Results' :

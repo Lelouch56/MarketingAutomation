@@ -336,12 +336,16 @@ export default function ResultsTable({ columns, rows, emptyMessage }: Props) {
   }
 
   return (
-    <TableContainer component={Paper} elevation={0} variant="outlined">
+    <TableContainer
+      component={Paper}
+      elevation={0}
+      sx={{ border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px', overflow: 'hidden' }}
+    >
       <Table size="small">
         <TableHead>
           <TableRow>
             {columns.map((col) => (
-              <TableCell key={col.key} sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+              <TableCell key={col.key} sx={{ whiteSpace: 'nowrap' }}>
                 {col.label}
               </TableCell>
             ))}
@@ -349,7 +353,7 @@ export default function ResultsTable({ columns, rows, emptyMessage }: Props) {
         </TableHead>
         <TableBody>
           {rows.map((row, i) => (
-            <TableRow key={i} hover>
+            <TableRow key={i} hover sx={{ '&:hover': { bgcolor: 'rgba(23,84,207,0.03)' } }}>
               {columns.map((col) => (
                 <TableCell key={col.key}>
                   <CellValue value={row[col.key]} type={col.type} row={row} />

@@ -75,10 +75,10 @@ export default function LogsPage() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={3} flexWrap="wrap" gap={2}>
         <Box>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>Activity Logs</Typography>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Activity Logs</Typography>
           <Typography variant="body2" color="text.secondary">
             Track all agent runs and system events{' '}
-            <Chip label={`${totalCount} entries`} size="small" sx={{ ml: 0.5 }} />
+            <Chip label={`${totalCount} entries`} size="small" sx={{ ml: 0.5, bgcolor: 'rgba(23,84,207,0.08)', color: 'primary.main', fontWeight: 600 }} />
           </Typography>
         </Box>
 

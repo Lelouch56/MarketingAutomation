@@ -4,21 +4,22 @@ export const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#1565C0',
-      dark: '#0D47A1',
-      light: '#1976D2',
+      main: '#1754cf',
+      dark: '#1240b0',
+      light: '#3b73e0',
     },
     secondary: {
       main: '#FF6F00',
     },
     background: {
-      default: '#F5F6FA',
+      default: '#f6f6f8',
       paper: '#FFFFFF',
     },
-    success: { main: '#2E7D32' },
+    success: { main: '#059669' },
     warning: { main: '#ED6C02' },
     error: { main: '#D32F2F' },
     info: { main: '#0288D1' },
+    divider: 'rgba(23,84,207,0.1)',
   },
   typography: {
     fontFamily: '"Inter", "Roboto", "Helvetica Neue", "Arial", sans-serif',
@@ -63,8 +64,12 @@ export const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         head: {
-          fontWeight: 600,
-          backgroundColor: '#F8F9FC',
+          fontWeight: 700,
+          backgroundColor: '#f8f9fc',
+          fontSize: 11,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          color: '#64748b',
         },
       },
     },

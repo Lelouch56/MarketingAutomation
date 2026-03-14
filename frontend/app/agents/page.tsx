@@ -40,7 +40,7 @@ export default function AgentsPage() {
   return (
     <Box>
       <Box mb={3}>
-        <Typography variant="h4" gutterBottom sx={{ mb: 0.5 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
           All Agents
         </Typography>
         <Typography variant="body2" color="text.secondary">
@@ -59,7 +59,11 @@ export default function AgentsPage() {
           <CircularProgress />
         </Box>
       ) : (
-        <TableContainer component={Paper} elevation={0} variant="outlined">
+        <TableContainer
+          component={Paper}
+          elevation={0}
+          sx={{ border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px', overflow: 'hidden' }}
+        >
           <Table>
             <TableHead>
               <TableRow>
@@ -75,7 +79,7 @@ export default function AgentsPage() {
             </TableHead>
             <TableBody>
               {agents.map((agent) => (
-                <TableRow key={agent.id} hover>
+                <TableRow key={agent.id} hover sx={{ '&:hover': { bgcolor: 'rgba(23,84,207,0.03)' } }}>
                   <TableCell>
                     <Typography variant="body2" fontWeight={600}>
                       {agent.name}
@@ -106,9 +110,11 @@ export default function AgentsPage() {
                   <TableCell>
                     <Chip
                       label={agent.implemented ? 'Live' : 'Coming Soon'}
-                      color={agent.implemented ? 'success' : 'default'}
                       size="small"
-                      variant={agent.implemented ? 'filled' : 'outlined'}
+                      sx={agent.implemented
+                        ? { bgcolor: 'rgba(5,150,105,0.1)', color: '#059669', fontWeight: 700, fontSize: 11, borderRadius: '100px' }
+                        : { bgcolor: 'rgba(100,116,139,0.1)', color: '#64748b', fontWeight: 600, fontSize: 11, borderRadius: '100px' }
+                      }
                     />
                   </TableCell>
                   <TableCell align="right">
