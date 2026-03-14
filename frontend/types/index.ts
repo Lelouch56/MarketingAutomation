@@ -249,6 +249,8 @@ export interface RejectedProspectRecord {
   removal_reason: 'duplicate_email' | 'off_target_role' | 'non_travel_tech';
   removed_at?: string;
   created_at?: string;
+  force_enrolled?: boolean;
+  force_enrolled_at?: string;
 }
 
 export interface ReportRecord {

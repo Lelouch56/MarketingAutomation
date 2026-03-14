@@ -59,33 +59,33 @@ const LEAD_COLUMNS: Column[] = [
 ];
 
 const OUTREACH_COLUMNS: Column[] = [
-  { key: 'name',                 label: 'Name' },
-  { key: 'linkedin_url',         label: 'LinkedIn',       type: 'link' },
-  { key: 'title',                label: 'Title',          type: 'truncate' },
-  { key: 'company',              label: 'Company' },
-  { key: 'company_type',         label: 'Industry Type',  type: 'badge' },
-  { key: 'crm_tag',              label: 'CRM Tag',        type: 'badge' },
-  { key: 'qualification_status', label: 'Qualification',  type: 'badge' },
-  { key: 'email',                label: 'Email' },
-  { key: 'phone',                label: 'Phone' },
-  { key: 'region',               label: 'Region' },
-  { key: 'lead_source',          label: 'Lead Source',    type: 'badge' },
-  { key: 'relevance_reason',     label: 'Relevance',      type: 'tooltip' },
-  { key: 'status',               label: 'Status',         type: 'badge' },
-  { key: 'outplay_enrolled',     label: 'Outplay' },
-  { key: 'created_at',           label: 'Created',        type: 'date' },
+  { key: 'name', label: 'Name' },
+  { key: 'linkedin_url', label: 'LinkedIn', type: 'link' },
+  { key: 'title', label: 'Title', type: 'truncate' },
+  { key: 'company', label: 'Company' },
+  { key: 'company_type', label: 'Industry Type', type: 'badge' },
+  { key: 'crm_tag', label: 'CRM Tag', type: 'badge' },
+  { key: 'qualification_status', label: 'Qualification', type: 'badge' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'region', label: 'Region' },
+  { key: 'lead_source', label: 'Lead Source', type: 'badge' },
+  { key: 'relevance_reason', label: 'Relevance', type: 'tooltip' },
+  { key: 'status', label: 'Status', type: 'badge' },
+  { key: 'outplay_enrolled', label: 'Outplay' },
+  { key: 'created_at', label: 'Created', type: 'date' },
 ];
 
 const REMOVED_COLUMNS: Column[] = [
-  { key: 'name',           label: 'Name' },
-  { key: 'title',          label: 'Title',            type: 'truncate' },
-  { key: 'company',        label: 'Company' },
-  { key: 'company_type',   label: 'Industry Type',    type: 'badge' },
-  { key: 'email',          label: 'Email' },
-  { key: 'region',         label: 'Region' },
-  { key: 'lead_source',    label: 'Lead Source',      type: 'badge' },
-  { key: 'removal_reason', label: 'Removed Because',  type: 'badge' },
-  { key: 'removed_at',     label: 'Removed At',       type: 'date' },
+  { key: 'name', label: 'Name' },
+  { key: 'title', label: 'Title', type: 'truncate' },
+  { key: 'company', label: 'Company' },
+  { key: 'company_type', label: 'Industry Type', type: 'badge' },
+  { key: 'email', label: 'Email' },
+  { key: 'region', label: 'Region' },
+  { key: 'lead_source', label: 'Lead Source', type: 'badge' },
+  { key: 'removal_reason', label: 'Removed Because', type: 'badge' },
+  { key: 'removed_at', label: 'Removed At', type: 'date' },
 ];
 
 const REPORT_COLUMNS: Column[] = [
@@ -156,7 +156,7 @@ export default function AgentDetailPage() {
   const [runError, setRunError] = useState('');
   const [runSuccess, setRunSuccess] = useState('');
   const [csvUploading, setCsvUploading] = useState(false);
-  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [forcingEnrollId, setForcingEnrollId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Agent 1 LinkedIn toggle — only relevant when LinkedIn is configured
@@ -303,10 +303,9 @@ export default function AgentDetailPage() {
     } catch (err) { setFormError(extractApiError(err)); }
   };
 
-  const handleApproveTarget = async (targetId: string) => {
-    setApprovingId(targetId);
+  const handleForceEnroll = async (rejectedId: string) => {
+    setForcingEnrollId(rejectedId);
     try {
-      // Build outplay body from saved config so enrollment fires immediately
       const outplayCfg = getOutplayConfig();
       const body: Record<string, unknown> = {};
       if (outplayCfg?.clientSecret) {
@@ -320,17 +319,17 @@ export default function AgentDetailPage() {
           sequence_id_c: outplayCfg.sequenceIdC || '',
         };
       }
-      const result = await agent3Api.approveTarget(targetId, body);
+      const result = await agent3Api.forceEnrollRejected(rejectedId, body);
       setFormSuccess(
         result.outplay_enrolled
-          ? '✓ Prospect approved and enrolled in Outplay sequence'
-          : 'Prospect approved — configure Outplay Sequence C in Settings to auto-enroll',
+          ? '✓ Filtered prospect force-enrolled in Outplay sequence'
+          : result.message || 'Could not enroll — check Outplay config in Settings',
       );
-      agent3Api.getOutreachTargets().then(setOutreachTargets);
+      agent3Api.getRejectedProspects().then(setRejectedProspects);
     } catch (err) {
       setFormError(extractApiError(err));
     } finally {
-      setApprovingId(null);
+      setForcingEnrollId(null);
     }
   };
 
@@ -458,7 +457,7 @@ export default function AgentDetailPage() {
               <StatCard label="Valid Emails" value={outreachTargets.filter((t) => t.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t.email)).length} />
             </Grid>
             <Grid item xs={6} sm={3}>
-              <StatCard label="Pending Approval" value={outreachTargets.filter((t) => t.status === 'pending_approval').length} />
+              <StatCard label="Filtered Out" value={rejectedProspects.length} />
             </Grid>
             <Grid item xs={6} sm={3}>
               <StatCard label="Outplay Enrolled" value={outreachTargets.filter((t) => t.outplay_enrolled).length} />
@@ -514,9 +513,9 @@ export default function AgentDetailPage() {
               sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
               <Tab label={
                 isAgent1 ? 'Topics & Results' :
-                isAgent2 ? 'Leads & Results' :
-                isAgent3 ? 'Outreach Targets' :
-                'Reports'
+                  isAgent2 ? 'Leads & Results' :
+                    isAgent3 ? 'Outreach Targets' :
+                      'Reports'
               } />
               {(isAgent1 || isAgent2) && <Tab label="Downloads" />}
               {(isAgent1 || isAgent2) && <Tab label="Add Data" />}
@@ -562,6 +561,8 @@ export default function AgentDetailPage() {
                   {formError && (
                     <Alert severity="error" sx={{ mb: 2 }} onClose={() => setFormError('')}>{formError}</Alert>
                   )}
+
+                  {/* ── Outreach Targets (auto-enrolled) ────────────────── */}
                   {outreachTargets.length === 0 ? (
                     <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
                       No outreach targets yet. Run the agent to generate prospects.
@@ -569,9 +570,9 @@ export default function AgentDetailPage() {
                   ) : (
                     <Box>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Approve prospects to enroll them in the Outplay outreach sequence.
-                        Prospects are tagged <strong>Qualified Lead</strong> or <strong>Travel Tech Prospect</strong>, classified by industry type, and rated by qualification status.
-                        Only prospects with validated emails will be enrolled. Sequence stops automatically on reply.
+                        All prospects discovered by Agent 3 are <strong>automatically enrolled</strong> in the Outplay Travel Tech Outreach sequence (Sequence C).
+                        Prospects are tagged <strong>Qualified Lead</strong> or <strong>Travel Tech Prospect</strong>, classified by industry type.
+                        Only validated emails are enrolled. Sequence stops automatically on reply.
                       </Typography>
                       <ResultsTable
                         columns={OUTREACH_COLUMNS}
@@ -582,61 +583,62 @@ export default function AgentDetailPage() {
                         })) as unknown as Record<string, unknown>[]}
                         emptyMessage="No targets yet."
                       />
-                      <Box mt={2}>
-                        <Typography variant="subtitle2" gutterBottom>Approve Pending Prospects</Typography>
-                        {outreachTargets.filter((t) => t.status === 'pending_approval').map((t) => (
-                          <Box key={t.id} display="flex" alignItems="center" gap={2} mb={1} p={1.5}
-                            bgcolor="action.hover" borderRadius={1}>
-                            <Box flex={1}>
-                              <Typography variant="body2" fontWeight={500}>
-                                {t.first_name} {t.last_name} — {t.title} at {t.company}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {t.email || '(no email)'}
-                                {t.region ? ` · ${t.region}` : ''}
-                                {(t as any).company_type ? ` · ${(t as any).company_type}` : ''}
-                                {(t as any).crm_tag ? ` · ${(t as any).crm_tag}` : ''}
-                                {(t as any).qualification_status ? ` · ${(t as any).qualification_status}` : ''}
-                                {(t as any).lead_source ? ` · via ${(t as any).lead_source}` : ''}
-                              </Typography>
-                            </Box>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="success"
-                              startIcon={approvingId === t.id ? <CircularProgress size={12} color="inherit" /> : <CheckCircleIcon />}
-                              onClick={() => handleApproveTarget(t.id)}
-                              disabled={!!approvingId}
-                            >
-                              Approve
-                            </Button>
-                          </Box>
-                        ))}
-                        {outreachTargets.filter((t) => t.status === 'pending_approval').length === 0 && (
-                          <Typography variant="body2" color="text.secondary">No prospects awaiting approval.</Typography>
-                        )}
-                      </Box>
                     </Box>
                   )}
 
-                  {/* ── Filtered Out Contacts ──────────────────────────── */}
+                  {/* ── Filtered Out Contacts (with Force Enroll) ─────── */}
                   <Box mt={5}>
                     <Divider sx={{ mb: 3 }} />
                     <Typography variant="h6" gutterBottom>
                       Filtered Out ({rejectedProspects.length})
                     </Typography>
                     <Typography variant="body2" color="text.secondary" mb={2}>
-                      Contacts removed during Step 4 data cleaning — duplicate emails, off-target roles, or non-travel-tech companies.
+                      Contacts removed during Step 4 — duplicate emails, off-target roles, or non-travel-tech companies.
+                      Use <strong>Force Enroll</strong> to manually send a filtered prospect into the Outplay sequence anyway.
                     </Typography>
                     {rejectedProspects.length > 0 ? (
-                      <ResultsTable
-                        columns={REMOVED_COLUMNS}
-                        rows={rejectedProspects.map((p) => ({
-                          ...p,
-                          name: [p.first_name, p.last_name].filter(Boolean).join(' '),
-                        })) as unknown as Record<string, unknown>[]}
-                        emptyMessage="No filtered contacts."
-                      />
+                      <Box>
+                        <ResultsTable
+                          columns={REMOVED_COLUMNS}
+                          rows={rejectedProspects.map((p) => ({
+                            ...p,
+                            name: [p.first_name, p.last_name].filter(Boolean).join(' '),
+                          })) as unknown as Record<string, unknown>[]}
+                          emptyMessage="No filtered contacts."
+                        />
+                        <Box mt={2}>
+                          {rejectedProspects.filter((p) => !p.force_enrolled && p.email).map((p) => (
+                            <Box key={p.id} display="flex" alignItems="center" gap={2} mb={1} p={1.5}
+                              bgcolor="action.hover" borderRadius={1}>
+                              <Box flex={1}>
+                                <Typography variant="body2" fontWeight={500}>
+                                  {[p.first_name, p.last_name].filter(Boolean).join(' ') || '(No name)'} — {p.title || '?'} at {p.company || '?'}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {p.email}
+                                  {p.region ? ` · ${p.region}` : ''}
+                                  {p.removal_reason ? ` · Removed: ${p.removal_reason.replace(/_/g, ' ')}` : ''}
+                                </Typography>
+                              </Box>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="warning"
+                                startIcon={forcingEnrollId === p.id ? <CircularProgress size={12} color="inherit" /> : <CheckCircleIcon />}
+                                onClick={() => handleForceEnroll(p.id)}
+                                disabled={!!forcingEnrollId}
+                              >
+                                Approve
+                              </Button>
+                            </Box>
+                          ))}
+                          {rejectedProspects.filter((p) => !p.force_enrolled && p.email).length === 0 && (
+                            <Typography variant="body2" color="text.secondary">
+                              All filtered prospects have been enrolled or have no valid email.
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
                     ) : (
                       <Typography variant="body2" color="text.disabled">
                         No filtered contacts yet — run Agent 3 to populate.

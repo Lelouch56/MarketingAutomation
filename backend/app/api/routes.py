@@ -38,7 +38,7 @@ from app.agents.agent2.service import (
 from app.agents.agent3.service import (
     run_agent3_background, get_agent3_status,
     get_outreach_targets, approve_outreach_target,
-    get_rejected_prospects,
+    get_rejected_prospects, force_enroll_rejected_prospect,
 )
 from app.agents.agent4.service import (
     run_agent4_background, get_agent4_status,
@@ -557,6 +557,34 @@ def approve_target(target_id: str, body: ApproveTargetRequest = ApproveTargetReq
 def list_rejected_prospects():
     """Return all prospects removed during Step 4 data cleaning."""
     return get_rejected_prospects()
+
+
+@router.post("/agents/agent3/rejected-prospects/{rejected_id}/force-enroll")
+def force_enroll_rejected(rejected_id: str, body: ApproveTargetRequest = ApproveTargetRequest()):
+    """Force-enroll a filtered-out prospect into Outplay despite being removed in Step 4."""
+    outplay_config = None
+    if body.outplay:
+        outplay_config = OutplayConfig(
+            client_secret=body.outplay.client_secret,
+            client_id=body.outplay.client_id,
+            user_id=body.outplay.user_id,
+            location=body.outplay.location,
+            sequence_id_a=body.outplay.sequence_id_a,
+            sequence_id_b=body.outplay.sequence_id_b,
+            sequence_id_c=body.outplay.sequence_id_c,
+        )
+
+    result = force_enroll_rejected_prospect(rejected_id, outplay_config)
+    if not result["found"]:
+        raise HTTPException(status_code=404, detail=f"Rejected prospect '{rejected_id}' not found.")
+
+    _append_log(
+        "info",
+        f"Force-enroll rejected prospect {rejected_id[:8]}... "
+        + ("enrolled in Outplay" if result["outplay_enrolled"] else f"— {result['message']}"),
+        agent_id="agent3",
+    )
+    return result
 
 
 # ─────────────────────────────────────────────────────────────

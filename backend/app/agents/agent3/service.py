@@ -209,6 +209,70 @@ def approve_outreach_target(
     return {"found": found, "outplay_enrolled": outplay_enrolled}
 
 
+def force_enroll_rejected_prospect(
+    rejected_id: str,
+    outplay_config: Optional["OutplayConfig"] = None,
+) -> dict:
+    """Force-enroll a previously filtered-out (rejected) prospect into Outplay.
+
+    Looks up the prospect in rejected_prospects.json by ID, calls
+    add_prospect_to_outplay, and marks the record with force_enrolled=True.
+
+    Returns {'found': bool, 'outplay_enrolled': bool, 'message': str}.
+    """
+    prospects = rejected_db.read()
+    found = False
+    outplay_enrolled = False
+    message = ""
+
+    for p in prospects:
+        if p.get("id") != rejected_id:
+            continue
+        found = True
+
+        if not outplay_config:
+            message = "Outplay not configured — add credentials in Settings → Integrations"
+            break
+
+        email = p.get("email", "")
+        if not _is_valid_email(email):
+            message = f"Cannot enroll — invalid or missing email ({email!r})"
+            break
+
+        if p.get("force_enrolled"):
+            message = "Already enrolled"
+            outplay_enrolled = True
+            break
+
+        try:
+            name = f"{p.get('first_name', '')} {p.get('last_name', '')}".strip()
+            seq_id = outplay_config.sequence_id_c or outplay_config.sequence_id_a
+            add_prospect_to_outplay(
+                outplay_config,
+                email=email,
+                name=name or None,
+                company=p.get("company"),
+                sequence_id=seq_id,
+            )
+            p["force_enrolled"] = True
+            p["force_enrolled_at"] = _now()
+            outplay_enrolled = True
+            message = f"Enrolled in Outplay sequence {seq_id}"
+            logger.info(
+                "Force-enrolled filtered prospect %s <%s> → sequence %s",
+                name, email, seq_id,
+            )
+        except Exception as e:
+            message = f"Outplay enrollment failed: {str(e)[:150]}"
+            logger.warning("Force-enroll failed for %s: %s", rejected_id[:8], str(e)[:150])
+        break
+
+    if found and outplay_enrolled:
+        rejected_db.write(prospects)
+
+    return {"found": found, "outplay_enrolled": outplay_enrolled, "message": message}
+
+
 def _is_valid_email(email: str) -> bool:
     return bool(email and _EMAIL_RE.match(email.strip()))
 
@@ -613,12 +677,14 @@ def _step5_crm_upload(prospects: list, run_id: str) -> int:
             "connection_message": p.get("connection_message", ""),
             "is_dummy": p.get("is_dummy", False),
             "source": p.get("source", "unknown"),
-            "status": "pending_approval",
+            # Auto-approved — Outplay enrollment runs immediately in Step 6.
+            # No manual approval step required for Matters broad.
+            "status": "approved",
             "klenty_enrolled": False,
             "outplay_enrolled": False,
             "linkedin_status": None,
             "created_at": now,
-            "approved_at": None,
+            "approved_at": now,
         })
         count += 1
     return count
@@ -957,10 +1023,10 @@ def run_agent3_background(
         )
         _update_step(
             5, "completed",
-            f"{added_count} prospects saved to Matters Board CRM — "
+            f"{added_count} prospects auto-approved and saved to Matters Board CRM — "
             f"{qualified_count} tagged 'Qualified Lead', {added_count - qualified_count} tagged 'Travel Tech Prospect'. "
             f"{fully_qualified} fully qualified (valid email + senior role). "
-            f"Approve prospects in the Agent 3 detail page to launch outreach campaigns."
+            f"Proceeding to Step 6 for automatic Outplay enrollment..."
         )
 
         # ── Step 6: Campaign Execution ────────────────────────────────────
@@ -989,13 +1055,13 @@ def run_agent3_background(
 
         if enroll_parts:
             _update_step(6, "completed",
-                f"{', '.join(enroll_parts)}, {queued} pending approval. "
+                f"{', '.join(enroll_parts)}. "
                 "Sequence stops automatically on reply — bounced/unsubscribed emails suppressed.")
         else:
             _update_step(
                 6, "completed",
-                f"{queued} prospects queued for outreach — approve prospects in the detail page, "
-                "then connect Apollo/Outplay/Klenty in Settings → Integrations to launch outreach sequences."
+                "Outplay not configured — add Sequence C credentials in Settings → Integrations "
+                "to auto-enroll prospects. Filtered-out contacts can be force-enrolled from the Filtered Out section."
             )
 
         # Final metrics
