@@ -44,7 +44,11 @@ export default function LogsTable({ logs }: Props) {
   }
 
   return (
-    <TableContainer component={Paper} elevation={0} variant="outlined">
+    <TableContainer
+      component={Paper}
+      elevation={0}
+      sx={{ border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px', overflow: 'hidden' }}
+    >
       <Table size="small">
         <TableHead>
           <TableRow>
@@ -56,26 +60,28 @@ export default function LogsTable({ logs }: Props) {
         </TableHead>
         <TableBody>
           {logs.map((log) => (
-            <TableRow key={log.id} hover>
+            <TableRow key={log.id} hover sx={{ '&:hover': { bgcolor: 'rgba(23,84,207,0.03)' } }}>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>
                 <Typography variant="caption" color="text.secondary">
                   {new Date(log.timestamp).toLocaleTimeString()}
                 </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.disabled"
-                  sx={{ display: 'block', fontSize: 10 }}
-                >
+                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', fontSize: 10 }}>
                   {new Date(log.timestamp).toLocaleDateString()}
                 </Typography>
               </TableCell>
               <TableCell>
                 <Chip
                   label={log.level}
-                  color={LEVEL_COLORS[log.level] ?? 'default'}
                   size="small"
-                  variant="outlined"
-                  sx={{ textTransform: 'capitalize', fontWeight: 600 }}
+                  sx={{
+                    textTransform: 'capitalize',
+                    fontWeight: 700,
+                    fontSize: 10.5,
+                    borderRadius: '100px',
+                    ...(log.level === 'info' && { bgcolor: 'rgba(2,136,209,0.1)', color: '#0288D1' }),
+                    ...(log.level === 'warning' && { bgcolor: 'rgba(237,108,2,0.1)', color: '#ED6C02' }),
+                    ...(log.level === 'error' && { bgcolor: 'rgba(211,47,47,0.1)', color: '#D32F2F' }),
+                  }}
                 />
               </TableCell>
               <TableCell>
@@ -83,14 +89,14 @@ export default function LogsTable({ logs }: Props) {
                   <Chip
                     label={AGENT_LABELS[log.agent_id] ?? log.agent_id}
                     size="small"
-                    sx={{ fontSize: 11 }}
+                    sx={{ fontSize: 10.5, bgcolor: 'rgba(23,84,207,0.08)', color: 'primary.main', fontWeight: 600, borderRadius: '100px' }}
                   />
                 ) : (
                   <Typography variant="caption" color="text.disabled">—</Typography>
                 )}
               </TableCell>
               <TableCell>
-                <Typography variant="body2" sx={{ maxWidth: 500, wordBreak: 'break-word' }}>
+                <Typography variant="body2" sx={{ maxWidth: 500, wordBreak: 'break-word', fontSize: 13 }}>
                   {log.message}
                 </Typography>
               </TableCell>

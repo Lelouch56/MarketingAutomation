@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Box
                 component="main"
                 flexGrow={1}
-                p={3}
+                p={4}
                 overflow="auto"
                 sx={{ maxWidth: '100%' }}
               >

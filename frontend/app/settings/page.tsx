@@ -589,14 +589,14 @@ export default function SettingsPage() {
   return (
     <Box>
       <Box mb={3}>
-        <Typography variant="h4" sx={{ mb: 0.5 }}>Settings</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>Settings</Typography>
         <Typography variant="body2" color="text.secondary">
           Configure your AI provider and integration connections
         </Typography>
       </Box>
 
       {/* ──────────────────────── LLM Configuration ──────────────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 4 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 4, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Typography variant="h6" gutterBottom>LLM Provider Configuration</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           Your API key is stored in your browser&apos;s local storage and sent directly to the AI
@@ -733,7 +733,7 @@ export default function SettingsPage() {
       </Paper>
 
       {/* ──────────────────────── Image Generation Config ──────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="h6">Image Generation (Agent 1 — Hangout Social)</Typography>
           <FormControlLabel
@@ -833,7 +833,7 @@ export default function SettingsPage() {
       </Typography>
 
       {/* ──────────────────────── LinkedIn Integration ───────────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>LinkedIn API — Auto-Post Blogs &amp; Content</Typography>
           <Box
@@ -969,7 +969,7 @@ export default function SettingsPage() {
       </Paper>
 
       {/* ──────────────────────── Klenty Integration ────────────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>Klenty — Email Outreach Automation</Typography>
           <Box
@@ -1071,7 +1071,7 @@ export default function SettingsPage() {
       </Paper>
 
       {/* ──────────────────────── Outplay Integration ────────────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>Outplay — Email Outreach Automation</Typography>
           <Box
@@ -1208,7 +1208,7 @@ export default function SettingsPage() {
       </Paper>
 
       {/* ──────────────────────── Apollo.io Integration ─────────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>Apollo.io — Prospect Search (Agent 3)</Typography>
           <Box
@@ -1322,7 +1322,7 @@ export default function SettingsPage() {
       </Paper>
 
       {/* ──────────────────────── Sales Navigator Integration ────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>LinkedIn Sales Navigator — Primary Prospect Search (Agent 3)</Typography>
           <Box
@@ -1407,7 +1407,7 @@ export default function SettingsPage() {
       </Paper>
 
       {/* ──────────────────────── HubSpot CRM Integration ───────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>HubSpot CRM — Lead Source (Agent 2) &amp; Email Sequences (Agent 3)</Typography>
           <Box
@@ -1515,7 +1515,7 @@ export default function SettingsPage() {
       </Paper>
 
       {/* ──────────────────────── PhantomBuster Integration ─────────────── */}
-      <Paper elevation={0} variant="outlined" sx={{ p: 3, mb: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(23,84,207,0.1)', borderRadius: '12px' }}>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
           <Typography variant="subtitle1" fontWeight={600}>PhantomBuster — LinkedIn Prospect Discovery &amp; Connection Sending</Typography>
           <Box
