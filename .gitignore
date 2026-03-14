@@ -44,8 +44,8 @@ desktop.ini
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log
-logs/
 npm-debug.log*
+# Note: "logs/" intentionally NOT ignored — frontend/app/logs/ is a Next.js route
 
 # ─── Misc build artifacts ─────────────────────────────────────────────────────
 *.tsbuildinfo
