@@ -121,7 +121,7 @@ export default function Dashboard() {
         id: Date.now().toString(),
         timestamp: new Date().toISOString(),
         level: 'info',
-        message: 'Agent 3 (Matters broad) started',
+        message: 'Agent 3 (Matters Broad) started',
         agent_id: 'agent3',
       });
       setSuccessMsg('Agent 3 started! Watching progress...');
@@ -217,28 +217,13 @@ export default function Dashboard() {
         <Grid item xs={12} sm={6}>
           <AgentCard
             agentId="agent3"
-            name="Matters broad"
+            name="Matters Broad"
             description="Reads Matters hot leads, domain-searches Apollo for decision-makers at those exact companies, AI-scores outreach fit with personalized LinkedIn messages, and auto-enrolls approved targets."
             status={a3Status}
             stepsCount={8}
             onRun={handleRunAgent3}
             isRunning={a3Running || a3Status?.status === 'running'}
             lastRun={a3Status?.completed_at}
-            implemented={true}
-          />
-        </Grid>
-
-        {/* Agent 4 */}
-        <Grid item xs={12} sm={6}>
-          <AgentCard
-            agentId="agent4"
-            name="Ringside View"
-            description="Aggregates data from all agents, generates AI-powered performance insights, creates executive reports with visualizations and funnel analysis."
-            status={a4Status}
-            stepsCount={6}
-            onRun={handleRunAgent4}
-            isRunning={a4Running || a4Status?.status === 'running'}
-            lastRun={a4Status?.completed_at}
             implemented={true}
           />
         </Grid>
@@ -254,6 +239,21 @@ export default function Dashboard() {
             onRun={handleRunAgent1}
             isRunning={a1Running || a1Status?.status === 'running'}
             lastRun={a1Status?.completed_at}
+            implemented={true}
+          />
+        </Grid>
+
+        {/* Agent 4 */}
+        <Grid item xs={12} sm={6}>
+          <AgentCard
+            agentId="agent4"
+            name="Ringside View"
+            description="Aggregates data from all agents, generates AI-powered performance insights, creates executive reports with visualizations and funnel analysis."
+            status={a4Status}
+            stepsCount={6}
+            onRun={handleRunAgent4}
+            isRunning={a4Running || a4Status?.status === 'running'}
+            lastRun={a4Status?.completed_at}
             implemented={true}
           />
         </Grid>
